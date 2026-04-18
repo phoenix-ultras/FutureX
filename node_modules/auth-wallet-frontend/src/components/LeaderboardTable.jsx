@@ -1,4 +1,11 @@
 import { formatCoins, formatPercentage } from '../lib/marketUtils';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import Paper from '@mui/material/Paper';
 
 function LeaderboardTable({ entries, title = 'Leaderboard', subtitle }) {
   return (
@@ -12,36 +19,42 @@ function LeaderboardTable({ entries, title = 'Leaderboard', subtitle }) {
       </div>
 
       <div className="table-wrap">
-        <table className="leaderboard-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>User</th>
-              <th>Earnings</th>
-              <th>Win rate</th>
-              <th>Settled trades</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.length ? (
-              entries.map((entry, index) => (
-                <tr key={`${entry.userId || entry.username}-${index}`}>
-                  <td>#{entry.rank || index + 1}</td>
-                  <td>{entry.username || 'Unknown trader'}</td>
-                  <td>{formatCoins(entry.earnings || entry.realizedPnl || 0)}</td>
-                  <td>{formatPercentage(entry.winRate || 0)}</td>
-                  <td>{entry.settledTrades || entry.totalTrades || 0}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="empty-cell">
-                  No leaderboard data available yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <TableContainer component={Paper} className="!bg-transparent !shadow-none">
+          <Table className="leaderboard-table" sx={{ minWidth: 650 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell className="!text-gray-400 !border-gray-700/50">Rank</TableCell>
+                <TableCell className="!text-gray-400 !border-gray-700/50">User</TableCell>
+                <TableCell className="!text-gray-400 !border-gray-700/50">Earnings</TableCell>
+                <TableCell className="!text-gray-400 !border-gray-700/50">Win rate</TableCell>
+                <TableCell className="!text-gray-400 !border-gray-700/50">Settled trades</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {entries.length ? (
+                entries.map((entry, index) => (
+                  <TableRow 
+                    key={`${entry.userId || entry.username}-${index}`} 
+                    className="hover:!bg-cyan-500/10 hover:!shadow-[inset_0_0_10px_rgba(0,245,255,0.1)] transition-all duration-300"
+                    sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                  >
+                    <TableCell className="!text-white !border-gray-700/50">#{entry.rank || index + 1}</TableCell>
+                    <TableCell className="!text-white !border-gray-700/50">{entry.username || 'Unknown trader'}</TableCell>
+                    <TableCell className="!text-neon-green !border-gray-700/50">{formatCoins(entry.earnings || entry.realizedPnl || 0)}</TableCell>
+                    <TableCell className="!text-white !border-gray-700/50">{formatPercentage(entry.winRate || 0)}</TableCell>
+                    <TableCell className="!text-white !border-gray-700/50">{entry.settledTrades || entry.totalTrades || 0}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="!text-gray-400 !text-center !border-gray-700/50 !py-8">
+                    No leaderboard data available yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </div>
     </section>
   );

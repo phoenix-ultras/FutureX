@@ -20,6 +20,7 @@ function Leaderboard() {
       try {
         const response = await getLeaderboard();
         if (isMounted) {
+          console.log('[DEBUG] Leaderboard API Fetched:', response.data || response.leaderboard);
           setEntries(response.data || response.leaderboard || []);
           setNotice('');
         }

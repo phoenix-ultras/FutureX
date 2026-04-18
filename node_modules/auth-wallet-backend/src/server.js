@@ -1,13 +1,18 @@
+
 const app = require('./app');
 const env = require('./config/env');
 const db = require('./config/db');
 const { ensureSchema } = require('./services/databaseService');
 const fs = require('fs');
 const path = require('path');
+const socketService = require('./services/socketService');
+const settlementEngine = require('./services/settlementEngine');
 
 function startListening(port) {
   const server = app.listen(port, () => {
     console.log(`Backend server running on port ${port}`);
+    socketService.init(server);
+    settlementEngine.start();
     
     // Automatically configure frontend to connect to the correct backend port
     try {

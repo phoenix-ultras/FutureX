@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: dark;
-  font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+  font-family: 'Inter', sans-serif;
   line-height: 1.5;
   font-weight: 500;
   --bg: #0a0a0a;
@@ -43,6 +43,18 @@ body {
   min-height: 100vh;
   background: transparent;
   color: var(--text);
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+p, span, button {
+  font-size: 13.5px;
+  letter-spacing: 0.2px;
 }
 
 a {
@@ -791,4 +803,70 @@ input:focus {
   .market-card-header {
     flex-direction: column;
   }
+}
+
+/* --- NEW CYBERPUNK ENHANCEMENTS --- */
+
+:root {
+  --glow-cyan: #00f5ff;
+  --glow-purple: #8a2be2;
+}
+
+/* Glow Utility Classes */
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 245, 255, 0.6), 0 0 16px rgba(0, 245, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.25), inset 0 0 10px rgba(0, 245, 255, 0.1);
+  border-color: rgba(0, 245, 255, 0.4);
+}
+
+.glow-cyan-text {
+  text-shadow: 0 0 8px rgba(0, 245, 255, 0.7), 0 0 14px rgba(0, 245, 255, 0.4);
+}
+
+.glow-purple {
+  text-shadow: 0 0 8px rgba(138, 43, 226, 0.6), 0 0 16px rgba(138, 43, 226, 0.3);
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.25), inset 0 0 10px rgba(138, 43, 226, 0.1);
+  border-color: rgba(138, 43, 226, 0.4);
+}
+
+.glow-purple-text {
+  text-shadow: 0 0 8px rgba(138, 43, 226, 0.7), 0 0 14px rgba(138, 43, 226, 0.4);
+}
+
+/* Animations */
+@keyframes float-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes soft-pulse {
+  0% {
+    opacity: 0.85;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 24px rgba(0, 245, 255, 0.4);
+  }
+  100% {
+    opacity: 0.85;
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.15);
+  }
+}
+
+/* Animation Utility Classes */
+.animate-float-gradient {
+  background-size: 200% 200%;
+  animation: float-gradient 12s ease infinite;
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 4s ease-in-out infinite;
 }

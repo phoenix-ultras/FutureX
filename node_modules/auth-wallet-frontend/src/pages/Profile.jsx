@@ -23,11 +23,13 @@ function Profile() {
 
       try {
         const [walletData, tradeData, marketData, statsData] = await Promise.all([
-          withAccessToken((token) => getWallet(token)),
-          getUserTrades(user.id).catch(() => ({ data: [] })),
-          getMarkets({ sort: 'latest' }).catch(() => ({ data: [] })),
-          getUserStats(user.id).catch(() => null)
+          withAccessToken((token) => getWallet(token)).catch((err) => { console.error('Profile: Wallet fetch failed', err); return null; }),
+          getUserTrades(user.id).catch((err) => { console.error('Profile: Trades fetch failed', err); return { data: [] }; }),
+          getMarkets({ sort: 'latest' }).catch((err) => { console.error('Profile: Markets fetch failed', err); return { data: [] }; }),
+          getUserStats(user.id).catch((err) => { console.error('Profile: Stats fetch failed', err); return null; })
         ]);
+
+        console.log('[DEBUG] Profile API Fetched:', { walletData, tradeData, marketData, statsData });
 
         if (!isMounted) {
           return;
@@ -159,7 +161,15 @@ function Profile() {
                         </span>
                       </div>
                       <div className="trade-history-meta">
-                        <strong>{trade.market?.result ? `Result: ${trade.market.result}` : 'Open'}</strong>
+                        <strong className={
+                          trade.market?.status?.toLowerCase() === 'settled' 
+                            ? (trade.side === trade.market?.result ? '!text-neon-green' : '!text-red-400') 
+                            : '!text-gray-300'
+                        }>
+                          {trade.market?.status?.toLowerCase() === 'settled' 
+                            ? (trade.side === trade.market?.result ? 'WIN' : 'LOSS')
+                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'Waiting Result' : 'Active Trade')}
+                        </strong>
                         <span>Odds {Number(trade.oddsAtTrade).toFixed(2)}x</span>
                       </div>
                     </div>

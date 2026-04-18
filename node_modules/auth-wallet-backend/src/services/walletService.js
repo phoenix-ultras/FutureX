@@ -1,11 +1,15 @@
 const db = require('../config/db');
 const walletModel = require('../models/walletModel');
+const transactionModel = require('../models/transactionModel');
 const ApiError = require('../utils/ApiError');
 
-function toWalletResponse(wallet) {
+function toWalletResponse(wallet, transactions = []) {
   return {
     balance: Number(wallet.balance),
-    lockedBalance: Number(wallet.locked_balance)
+    lockedBalance: Number(wallet.locked_balance),
+    invested: Number(wallet.invested || 0),
+    profit: Number(wallet.profit || 0),
+    transactions
   };
 }
 
@@ -16,7 +20,9 @@ async function getWalletByUserId(userId) {
     throw new ApiError(404, 'Wallet not found');
   }
 
-  return toWalletResponse(wallet);
+  const transactions = await transactionModel.getTransactionsByUserId(userId);
+
+  return toWalletResponse(wallet, transactions);
 }
 
 function calculateNextBalances(wallet, changes) {
@@ -29,7 +35,9 @@ function calculateNextBalances(wallet, changes) {
 
   return {
     balance: nextBalance,
-    lockedBalance: nextLockedBalance
+    lockedBalance: nextLockedBalance,
+    invested: Number(wallet.invested || 0),
+    profit: Number(wallet.profit || 0)
   };
 }
 
@@ -50,7 +58,9 @@ async function withWalletTransaction(userId, operation) {
     const updatedWallet = await walletModel.updateWalletBalances(client, {
       userId,
       balance: nextState.balance,
-      lockedBalance: nextState.lockedBalance
+      lockedBalance: nextState.lockedBalance,
+      invested: nextState.invested,
+      profit: nextState.profit
     });
 
     await client.query('COMMIT');

@@ -30,7 +30,10 @@ const userTradesValidation = [
     .withMessage('User id is required')
 ];
 
+router.post('/', placeTradeValidation, validateRequest, tradeController.placeTrade);
+
 router.post('/place', placeTradeValidation, validateRequest, tradeController.placeTrade);
 router.get('/:id/trades', userTradesValidation, validateRequest, tradeController.getTradesByUserId);
+router.get('/:id/stats', userTradesValidation, validateRequest, tradeController.getUserStats);
 
 module.exports = router;

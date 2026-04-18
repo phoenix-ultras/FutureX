@@ -8,10 +8,14 @@ import Markets from './pages/Markets';
 import MarketDetail from './pages/MarketDetail';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
+import BackgroundOverlay from './components/BackgroundOverlay';
 
 function App() {
   return (
-    <Routes>
+    <div className="relative min-h-screen bg-[#0a0a0a]">
+      <BackgroundOverlay animated={true} />
+      <div className="relative z-10">
+        <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route
@@ -35,6 +39,8 @@ function App() {
         }
       />
     </Routes>
+      </div>
+    </div>
   );
 }
 

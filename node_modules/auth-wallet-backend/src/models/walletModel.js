@@ -4,9 +4,9 @@ const ApiError = require('../utils/ApiError');
 async function createWallet(client, { userId, balance, lockedBalance = 0 }) {
   try {
     const result = await client.query(
-      `INSERT INTO wallets (user_id, balance, locked_balance)
-       VALUES ($1, $2, $3)
-       RETURNING user_id, balance, locked_balance, created_at`,
+      `INSERT INTO wallets (user_id, balance, locked_balance, invested, profit)
+       VALUES ($1, $2, $3, 0, 0)
+       RETURNING user_id, balance, locked_balance, invested, profit, created_at`,
       [userId, balance, lockedBalance]
     );
 
@@ -22,7 +22,7 @@ async function createWallet(client, { userId, balance, lockedBalance = 0 }) {
 
 async function findWalletByUserId(userId) {
   const result = await db.query(
-    `SELECT user_id, balance, locked_balance, created_at
+    `SELECT user_id, balance, locked_balance, invested, profit, created_at
      FROM wallets
      WHERE user_id = $1`,
     [userId]
@@ -31,13 +31,13 @@ async function findWalletByUserId(userId) {
   return result.rows[0] || null;
 }
 
-async function updateWalletBalances(client, { userId, balance, lockedBalance }) {
+async function updateWalletBalances(client, { userId, balance, lockedBalance, invested, profit }) {
   const result = await client.query(
     `UPDATE wallets
-     SET balance = $2, locked_balance = $3
+     SET balance = $2, locked_balance = $3, invested = COALESCE($4, invested), profit = COALESCE($5, profit)
      WHERE user_id = $1
-     RETURNING user_id, balance, locked_balance, created_at`,
-    [userId, balance, lockedBalance]
+     RETURNING user_id, balance, locked_balance, invested, profit, created_at`,
+    [userId, balance, lockedBalance, invested, profit]
   );
 
   return result.rows[0];
@@ -45,7 +45,7 @@ async function updateWalletBalances(client, { userId, balance, lockedBalance }) 
 
 async function findWalletByUserIdForUpdate(client, userId) {
   const result = await client.query(
-    `SELECT user_id, balance, locked_balance, created_at
+    `SELECT user_id, balance, locked_balance, invested, profit, created_at
      FROM wallets
      WHERE user_id = $1
      FOR UPDATE`,

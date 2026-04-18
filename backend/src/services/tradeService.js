@@ -4,6 +4,7 @@ const marketModel = require('../models/marketModel');
 const tradeModel = require('../models/tradeModel');
 const walletModel = require('../models/walletModel');
 const userModel = require('../models/userModel');
+const transactionModel = require('../models/transactionModel');
 
 function normalizeMarketState(market) {
   if (!market) {
@@ -103,7 +104,9 @@ async function placeTrade({ userId, marketId, side, amount }) {
     const updatedWallet = await walletModel.updateWalletBalances(client, {
       userId,
       balance: walletBalance - normalizedAmount,
-      lockedBalance: Number(wallet.locked_balance)
+      lockedBalance: Number(wallet.locked_balance),
+      invested: Number(wallet.invested || 0) + normalizedAmount,
+      profit: Number(wallet.profit || 0)
     });
 
     const updatedMarket = await marketModel.updateMarketPools(client, {
@@ -119,6 +122,13 @@ async function placeTrade({ userId, marketId, side, amount }) {
       side,
       amount: normalizedAmount,
       oddsAtTrade
+    });
+
+    await transactionModel.createTransaction(client, {
+      userId,
+      type: 'BET',
+      amount: normalizedAmount,
+      referenceId: String(trade.id)
     });
 
     await client.query('COMMIT');
@@ -160,28 +170,44 @@ async function settleMarket({ marketId, result }) {
     }
 
     const trades = await tradeModel.listTradesByMarketId(marketId, client);
-    const payoutsByUser = new Map();
 
     for (const trade of trades) {
-      if (trade.side !== result) {
-        continue;
-      }
+      const isWin = trade.side === result;
+      const amount = Number(trade.amount);
+      const payout = isWin ? amount * Number(trade.oddsAtTrade) : 0;
+      
+      const wallet = await walletModel.findWalletByUserIdForUpdate(client, trade.userId);
+      if (!wallet) continue;
 
-      const payout = Number(trade.amount) * Number(trade.oddsAtTrade);
-      payoutsByUser.set(trade.userId, (payoutsByUser.get(trade.userId) || 0) + payout);
-    }
+      let newBalance = Number(wallet.balance);
+      let newInvested = Math.max(0, Number(wallet.invested || 0) - amount);
+      let newProfit = Number(wallet.profit || 0);
 
-    for (const [userId, payout] of payoutsByUser.entries()) {
-      const wallet = await walletModel.findWalletByUserIdForUpdate(client, userId);
-
-      if (!wallet) {
-        continue;
+      if (isWin) {
+        newBalance += payout;
+        newProfit += (payout - amount);
+        await transactionModel.createTransaction(client, {
+          userId: trade.userId,
+          type: 'WIN',
+          amount: payout,
+          referenceId: String(trade.id)
+        });
+      } else {
+        newProfit -= amount;
+        await transactionModel.createTransaction(client, {
+          userId: trade.userId,
+          type: 'LOSS',
+          amount: amount,
+          referenceId: String(trade.id)
+        });
       }
 
       await walletModel.updateWalletBalances(client, {
-        userId,
-        balance: Number(wallet.balance) + payout,
-        lockedBalance: Number(wallet.locked_balance)
+        userId: trade.userId,
+        balance: newBalance,
+        lockedBalance: Number(wallet.locked_balance),
+        invested: newInvested,
+        profit: newProfit
       });
     }
 

@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { getMarkets, getUserTrades, getWallet } from '../lib/api';
 import { formatCoins } from '../lib/marketUtils';
 import { buildUserStats } from '../lib/statHelpers';
+import BackgroundOverlay from '../components/BackgroundOverlay';
+import { connectMarketSocket } from '../lib/socket';
 
 function Dashboard() {
   const { user, withAccessToken, clearSession } = useAuth();
@@ -24,10 +26,12 @@ function Dashboard() {
 
       try {
         const [walletData, marketData, tradeData] = await Promise.all([
-          withAccessToken((token) => getWallet(token)),
-          getMarkets({ sort: 'latest' }),
-          getUserTrades(user.id).catch(() => ({ data: [] }))
+          withAccessToken((token) => getWallet(token)).catch((err) => { console.error('Dashboard: Wallet fetch failed', err); return null; }),
+          getMarkets({ sort: 'latest' }).catch((err) => { console.error('Dashboard: Markets fetch failed', err); return { data: [] }; }),
+          getUserTrades(user.id).catch((err) => { console.error('Dashboard: Trades fetch failed', err); return { data: [] }; })
         ]);
+
+        console.log('[DEBUG] Dashboard API Data:', { walletData, marketData, tradeData });
 
         if (!isMounted) {
           return;
@@ -56,8 +60,18 @@ function Dashboard() {
       loadDashboard();
     }
 
+    // Set up realtime instant market updates
+    const socket = connectMarketSocket();
+    socket.on('market:update', (data) => {
+      console.log('[DEBUG] Instant Socket Update:', data);
+      setMarkets((prev) =>
+        prev.map((m) => (String(m.id) === String(data.marketId) ? { ...m, ...data.market } : m))
+      );
+    });
+
     return () => {
       isMounted = false;
+      socket.disconnect();
     };
   }, [clearSession, user?.id, withAccessToken]);
 
@@ -71,9 +85,12 @@ function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-bg via-gray-900 to-dark-bg text-light-text">
+    <div className="relative min-h-screen text-light-text">
+      {/* Background Overlay */}
+      <BackgroundOverlay withChart={true} showBaseGradient={false} opacity="opacity-40" />
+
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left Side */}
@@ -106,7 +123,7 @@ function Dashboard() {
 
             {/* Right Side */}
             <div className="relative">
-              <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-2xl">
+              <div className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-8 shadow-2xl border border-cyan-500/20 shadow-[0_0_30px_rgba(0,245,255,0.15)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(0,245,255,0.3)]">
                 <div className="aspect-square bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center">
                   <div className="text-center">
                     <div className="text-6xl mb-4">📈</div>
@@ -141,7 +158,7 @@ function Dashboard() {
       </section>
 
       {/* Feature Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/50">
+      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Why Choose Our Platform?</h2>
@@ -149,19 +166,19 @@ function Dashboard() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-neon-green/20 transition-all duration-300">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
               <div className="text-4xl mb-4">⚡</div>
               <h3 className="text-xl font-semibold text-white mb-2">Real-time Trading</h3>
               <p className="text-gray-400">Live market updates and instant trade execution with zero latency</p>
             </div>
             
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-neon-green/20 transition-all duration-300">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
               <div className="text-4xl mb-4">🔒</div>
               <h3 className="text-xl font-semibold text-white mb-2">Secure System</h3>
               <p className="text-gray-400">Bank-level security with encrypted transactions and protected funds</p>
             </div>
             
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg hover:shadow-neon-green/20 transition-all duration-300">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
               <div className="text-4xl mb-4">🧠</div>
               <h3 className="text-xl font-semibold text-white mb-2">Smart Predictions</h3>
               <p className="text-gray-400">AI-powered insights and analytics to guide your trading decisions</p>
@@ -171,7 +188,7 @@ function Dashboard() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
+      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-white mb-4">Protect your investments with precision</h2>
@@ -180,7 +197,7 @@ function Dashboard() {
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Chart-style card */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
               <h3 className="text-lg font-semibold text-white mb-4">Market Performance</h3>
               <div className="h-32 bg-gradient-to-r from-neon-green/20 to-cyan-500/20 rounded-lg flex items-center justify-center">
                 <span className="text-gray-400">📊 Chart Placeholder</span>
@@ -188,7 +205,7 @@ function Dashboard() {
             </div>
             
             {/* Circular progress */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
               <h3 className="text-lg font-semibold text-white mb-4">Win Rate</h3>
               <div className="relative w-24 h-24 mx-auto mb-4">
                 <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 36 36">
@@ -217,7 +234,7 @@ function Dashboard() {
             </div>
             
             {/* Earnings card */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg">
+            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
               <h3 className="text-lg font-semibold text-white mb-4">Total Earnings</h3>
               <div className="text-3xl font-bold text-neon-green mb-2">
                 {formatCoins(stats.realizedPnl)}
@@ -229,7 +246,7 @@ function Dashboard() {
       </section>
 
       {/* Existing Dashboard Content */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/50">
+      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
         <div className="max-w-7xl mx-auto">
           {error ? <div className="bg-red-900/50 text-red-400 p-4 rounded-lg mb-8">{error}</div> : null}
 
@@ -240,7 +257,7 @@ function Dashboard() {
             <StatsCard label="Longest streak" value={stats.longestWinStreak} helper="Winning trades" />
           </div>
 
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-lg">
+          <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.2)] transition-all duration-300">
             <div className="flex justify-between items-center mb-6">
               <div>
                 <span className="text-neon-green text-sm font-semibold">Trending now</span>

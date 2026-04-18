@@ -1,54 +1,148 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import { useAuth } from '../context/AuthContext';
 
 function Navbar() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Route matching for active tab
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/') return '/';
+    if (path.startsWith('/markets') || path.startsWith('/market/')) return '/markets';
+    if (path.startsWith('/leaderboard')) return '/leaderboard';
+    if (path.startsWith('/profile')) return '/profile';
+    return false;
+  };
+
+  const currentTab = getActiveTab();
 
   return (
     <header className="sticky top-0 z-50 bg-dark-bg/80 backdrop-blur-md border-b border-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
-          <Link className="flex items-center space-x-2" to="/">
-            <span className="text-2xl font-bold text-neon-green">NPX</span>
-            <div className="hidden sm:block">
-              <div className="text-white font-semibold">Neon Prediction Exchange</div>
-              <div className="text-sm text-gray-400">Realtime signal desk</div>
+      <nav className="flex items-center justify-between h-20 px-6 max-w-[1440px] mx-auto w-full">
+        {/* Left Section (Logo) */}
+        <div className="flex items-center">
+          <Link className="flex items-center gap-3" to="/">
+            <span className="text-3xl font-bold text-neon-green leading-none">NPX</span>
+            <div className="hidden sm:flex flex-col justify-center">
+              <div className="text-white font-semibold leading-tight text-base">Neon Prediction Exchange</div>
+              <div className="text-sm text-gray-400 leading-tight">Realtime signal desk</div>
             </div>
           </Link>
-
-          <nav className="hidden md:flex space-x-8">
-            <NavLink to="/" end className="text-gray-300 hover:text-neon-green transition-colors">
-              Dashboard
-            </NavLink>
-            <NavLink to="/markets" className="text-gray-300 hover:text-neon-green transition-colors">
-              Markets
-            </NavLink>
-            <NavLink to="/leaderboard" className="text-gray-300 hover:text-neon-green transition-colors">
-              Leaderboard
-            </NavLink>
-            <NavLink to="/profile" className="text-gray-300 hover:text-neon-green transition-colors">
-              Profile
-            </NavLink>
-          </nav>
-
-          <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2 bg-gray-800/50 px-3 py-2 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div>
-                <div className="text-white font-semibold text-sm">{user?.username || 'Trader'}</div>
-                <div className="text-xs text-gray-400">Online terminal</div>
-              </div>
-            </div>
-            <button 
-              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
-              onClick={logout} 
-              type="button"
-            >
-              Logout
-            </button>
-          </div>
         </div>
-      </div>
+
+        {/* Center Section (MUI Tabs) */}
+        <div className="hidden md:flex items-center">
+          <Tabs 
+            value={currentTab} 
+            onChange={(e, newValue) => navigate(newValue)}
+            TabIndicatorProps={{ 
+              style: { 
+                height: 3, 
+                backgroundColor: '#00f5ff',
+                borderRadius: '3px 3px 0 0'
+              } 
+            }}
+            sx={{
+              minHeight: '40px'
+            }}
+          >
+            <Tab 
+              value="/" 
+              label="Dashboard" 
+              disableRipple
+              sx={{ 
+                color: currentTab === '/' ? '#00f5ff !important' : '#9ca3af', 
+                fontWeight: 600, 
+                textTransform: 'none', 
+                fontSize: '0.95rem',
+                letterSpacing: '0.5px',
+                padding: '8px 16px',
+                minHeight: '40px',
+                "&:hover": {
+                  color: "#00e5ff",
+                  transition: "0.2s ease-in-out"
+                }
+              }} 
+            />
+            <Tab 
+              value="/markets" 
+              label="Markets" 
+              disableRipple
+              sx={{ 
+                color: currentTab === '/markets' ? '#00f5ff !important' : '#9ca3af', 
+                fontWeight: 600, 
+                textTransform: 'none', 
+                fontSize: '0.95rem',
+                letterSpacing: '0.5px',
+                padding: '8px 16px',
+                minHeight: '40px',
+                "&:hover": {
+                  color: "#00e5ff",
+                  transition: "0.2s ease-in-out"
+                }
+              }} 
+            />
+            <Tab 
+              value="/leaderboard" 
+              label="Leaderboard" 
+              disableRipple
+              sx={{ 
+                color: currentTab === '/leaderboard' ? '#00f5ff !important' : '#9ca3af', 
+                fontWeight: 600, 
+                textTransform: 'none', 
+                fontSize: '0.95rem',
+                letterSpacing: '0.5px',
+                padding: '8px 16px',
+                minHeight: '40px',
+                "&:hover": {
+                  color: "#00e5ff",
+                  transition: "0.2s ease-in-out"
+                }
+              }} 
+            />
+            <Tab 
+              value="/profile" 
+              label="Profile" 
+              disableRipple
+              sx={{ 
+                color: currentTab === '/profile' ? '#00f5ff !important' : '#9ca3af', 
+                fontWeight: 600, 
+                textTransform: 'none', 
+                fontSize: '0.95rem',
+                letterSpacing: '0.5px',
+                padding: '8px 16px',
+                minHeight: '40px',
+                "&:hover": {
+                  color: "#00e5ff",
+                  transition: "0.2s ease-in-out"
+                }
+              }} 
+            />
+          </Tabs>
+        </div>
+
+        {/* Right Section (User & Buttons) */}
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-3 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700/50">
+            <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
+            <div className="flex flex-col justify-center">
+              <div className="text-white font-semibold text-sm leading-tight">{user?.username || 'Trader'}</div>
+              <div className="text-xs text-gray-400 leading-tight">Online terminal</div>
+            </div>
+          </div>
+          <button 
+            className="bg-gray-700 hover:bg-gray-600 text-white px-5 h-10 flex items-center justify-center rounded-lg transition-colors text-base font-medium"
+            onClick={logout} 
+            type="button"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
     </header>
   );
 }

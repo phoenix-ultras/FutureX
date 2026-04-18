@@ -4,19 +4,18 @@ const API_BASE_URL = `${ROOT_URL}/api`;
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || ROOT_URL;
 
 function buildUrl(path) {
+  let url = '';
   if (/^https?:\/\//.test(path)) {
-    return path;
+    url = path;
+  } else if (path.startsWith('/api/')) {
+    url = `${ROOT_URL}${path}`;
+  } else if (path.startsWith('/')) {
+    url = `${ROOT_URL}${path}`;
+  } else {
+    url = `${API_BASE_URL}/${path}`;
   }
-
-  if (path.startsWith('/api/')) {
-    return `${ROOT_URL}${path}`;
-  }
-
-  if (path.startsWith('/')) {
-    return `${ROOT_URL}${path}`;
-  }
-
-  return `${API_BASE_URL}/${path}`;
+  console.log(`[API Request] -> ${url}`);
+  return url;
 }
 
 async function request(path, options = {}) {
