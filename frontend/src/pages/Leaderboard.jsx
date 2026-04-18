@@ -6,7 +6,7 @@ import { getLeaderboard, getMarkets, getUserTrades } from '../lib/api';
 import { buildUserStats } from '../lib/statHelpers';
 
 function Leaderboard() {
-  const { user } = useAuth();
+  const { user, withAccessToken } = useAuth();
   const [entries, setEntries] = useState([]);
   const [notice, setNotice] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +31,7 @@ function Leaderboard() {
 
         if (error.status === 404 && user?.id) {
           const [tradeData, marketData] = await Promise.all([
-            getUserTrades(user.id).catch(() => ({ data: [] })),
+            withAccessToken((token) => getUserTrades(user.id, token)).catch(() => ({ data: [] })),
             getMarkets({ sort: 'latest' }).catch(() => ({ data: [] }))
           ]);
 
@@ -40,7 +40,7 @@ function Leaderboard() {
             {
               rank: 1,
               userId: user.id,
-              username: user.username,
+              username: user.name || user.username,
               earnings: stats.realizedPnl,
               winRate: stats.winRate,
               settledTrades: stats.settledTrades
@@ -63,7 +63,7 @@ function Leaderboard() {
     return () => {
       isMounted = false;
     };
-  }, [user?.id, user?.username]);
+  }, [user?.id, user?.name, user?.username, withAccessToken]);
 
   const summary = useMemo(() => {
     const topEntry = entries[0];

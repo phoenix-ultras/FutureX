@@ -2,10 +2,12 @@ const express = require('express');
 const { body, param, query } = require('express-validator');
 const marketController = require('../controllers/marketController');
 const validateRequest = require('../middleware/validateRequest');
+const authMiddleware = require('../middleware/authMiddleware');
+const { isAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const allowedCategories = ['sports', 'creator', 'meme', 'product', 'trend'];
-const allowedStatuses = ['open', 'closed', 'settled'];
+const allowedStatuses = ['open', 'closed', 'settled', 'paid_out'];
 const allowedResults = ['YES', 'NO'];
 
 const createMarketValidation = [
@@ -77,13 +79,13 @@ const settleMarketValidation = [
     .withMessage(`Result must be one of: ${allowedResults.join(', ')}`)
 ];
 
-router.post('/create', createMarketValidation, validateRequest, marketController.createMarket);
+router.post('/create', authMiddleware, isAdmin, createMarketValidation, validateRequest, marketController.createMarket);
 router.get('/all', listMarketsValidation, validateRequest, marketController.listMarkets);
 router.get('/:id/odds', getMarketValidation, validateRequest, marketController.getMarketOdds);
 router.post('/settle', settleMarketValidation, validateRequest, marketController.settleMarket);
 router.get('/:id', getMarketValidation, validateRequest, marketController.getMarketById);
 
-router.post('/', createMarketValidation, validateRequest, marketController.createMarket);
+router.post('/', authMiddleware, isAdmin, createMarketValidation, validateRequest, marketController.createMarket);
 router.get('/', listMarketsValidation, validateRequest, marketController.listMarkets);
 
 module.exports = router;

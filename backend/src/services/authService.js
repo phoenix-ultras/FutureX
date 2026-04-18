@@ -7,15 +7,39 @@ const ApiError = require('../utils/ApiError');
 const { normalizeEmail, normalizeUsername } = require('../utils/sanitize');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/token');
 
-async function signup({ username, email, password }) {
+function createUserResponse(user, walletBalance = env.starterBalance) {
+  return {
+    id: user.id,
+    name: user.name || user.username,
+    username: user.username,
+    email: user.email,
+    role: user.role || 'user',
+    walletBalance: Number(walletBalance || 0),
+    createdAt: user.created_at
+  };
+}
+
+function buildUsername(nameOrUsername) {
+  const candidate = normalizeUsername(nameOrUsername)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 30);
+
+  return candidate || 'trader';
+}
+
+async function signup({ name, username, email, password, role }) {
   const normalizedEmail = normalizeEmail(email);
-  const normalizedUsername = normalizeUsername(username);
+  const normalizedName = normalizeUsername(name || username);
+  const normalizedUsername = normalizeUsername(username || buildUsername(normalizedName));
   const client = await db.getClient();
 
   try {
     await client.query('BEGIN');
     console.log('Signup transaction started', {
       username: normalizedUsername,
+      name: normalizedName,
       email: normalizedEmail
     });
 
@@ -28,7 +52,7 @@ async function signup({ username, email, password }) {
     );
 
     if (duplicateUserCheck.rowCount > 0) {
-      throw new ApiError(409, 'Email or username already exists');
+      throw new ApiError(409, 'Email or name already exists');
     }
 
     const passwordHash = await bcrypt.hash(password, env.bcryptSaltRounds);
@@ -38,8 +62,10 @@ async function signup({ username, email, password }) {
     });
     const user = await userModel.createUser(client, {
       username: normalizedUsername,
+      name: normalizedName,
       email: normalizedEmail,
-      passwordHash
+      passwordHash,
+      role: role === 'admin' ? 'admin' : 'user'
     });
     console.log('User inserted successfully', {
       userId: user.id,
@@ -63,7 +89,7 @@ async function signup({ username, email, password }) {
       userId: user.id
     });
 
-    return user;
+    return createUserResponse(user);
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Signup transaction rolled back', {
@@ -91,14 +117,17 @@ async function login({ email, password }) {
     throw new ApiError(401, 'Invalid email or password');
   }
 
+  const wallet = await walletModel.findWalletByUserId(user.id);
+
   return {
-    user: {
+    user: createUserResponse(user, wallet?.balance || 0),
+    accessToken: signAccessToken({
+      sub: user.id,
       id: user.id,
-      username: user.username,
-      email: user.email,
-      createdAt: user.created_at
-    },
-    accessToken: signAccessToken({ sub: user.id, username: user.username }),
+      role: user.role,
+      name: user.name || user.username,
+      username: user.username
+    }),
     refreshToken: signRefreshToken({ sub: user.id })
   };
 }
@@ -121,8 +150,17 @@ async function refreshAccessToken(refreshToken) {
     throw new ApiError(401, 'User no longer exists');
   }
 
+  const wallet = await walletModel.findWalletByUserId(user.id);
+
   return {
-    accessToken: signAccessToken({ sub: user.id, username: user.username })
+    accessToken: signAccessToken({
+      sub: user.id,
+      id: user.id,
+      role: user.role,
+      name: user.name || user.username,
+      username: user.username
+    }),
+    user: createUserResponse(user, wallet?.balance || 0)
   };
 }
 

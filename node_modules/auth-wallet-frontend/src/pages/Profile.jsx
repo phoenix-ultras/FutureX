@@ -24,9 +24,9 @@ function Profile() {
       try {
         const [walletData, tradeData, marketData, statsData] = await Promise.all([
           withAccessToken((token) => getWallet(token)).catch((err) => { console.error('Profile: Wallet fetch failed', err); return null; }),
-          getUserTrades(user.id).catch((err) => { console.error('Profile: Trades fetch failed', err); return { data: [] }; }),
+          withAccessToken((token) => getUserTrades(user.id, token)).catch((err) => { console.error('Profile: Trades fetch failed', err); return { data: [] }; }),
           getMarkets({ sort: 'latest' }).catch((err) => { console.error('Profile: Markets fetch failed', err); return { data: [] }; }),
-          getUserStats(user.id).catch((err) => { console.error('Profile: Stats fetch failed', err); return null; })
+          withAccessToken((token) => getUserStats(user.id, token)).catch((err) => { console.error('Profile: Stats fetch failed', err); return null; })
         ]);
 
         console.log('[DEBUG] Profile API Fetched:', { walletData, tradeData, marketData, statsData });
@@ -88,7 +88,7 @@ function Profile() {
       <div className="section-hero">
         <div>
           <span className="eyebrow">Trader profile</span>
-          <h1 className="hero-title">{user?.username}&apos;s performance cockpit</h1>
+          <h1 className="hero-title">{user?.name || user?.username}&apos;s performance cockpit</h1>
           <p className="muted">Wallet state, trade history, and settled performance all in one view.</p>
         </div>
       </div>
@@ -160,17 +160,17 @@ function Profile() {
                           {trade.side} | {formatCoins(trade.amount)} | {trade.market ? formatClosingTime(trade.market.closingTime) : 'Unknown close'}
                         </span>
                       </div>
-                      <div className="trade-history-meta">
-                        <strong className={
+                      <div className="trade-history-meta flex flex-col items-end gap-2">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
                           trade.market?.status?.toLowerCase() === 'settled' 
-                            ? (trade.side === trade.market?.result ? '!text-neon-green' : '!text-red-400') 
-                            : '!text-gray-300'
-                        }>
+                            ? (trade.side === trade.market?.result ? 'bg-green-500/20 text-neon-green border border-neon-green/30' : 'bg-red-500/20 text-red-400 border border-red-500/30') 
+                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-gray-700/50 text-gray-300')
+                        }`}>
                           {trade.market?.status?.toLowerCase() === 'settled' 
                             ? (trade.side === trade.market?.result ? 'WIN' : 'LOSS')
-                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'Waiting Result' : 'Active Trade')}
-                        </strong>
-                        <span>Odds {Number(trade.oddsAtTrade).toFixed(2)}x</span>
+                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'WAITING' : 'ACTIVE')}
+                        </span>
+                        <span className="text-sm text-gray-400">Odds {Number(trade.oddsAtTrade).toFixed(2)}x</span>
                       </div>
                     </div>
                   ))

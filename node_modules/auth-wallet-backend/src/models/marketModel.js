@@ -5,6 +5,9 @@ let nextMarketId = 1;
 const DB_FALLBACK_CODES = new Set(['ECONNREFUSED', '3D000', '42P01', 'ENOTFOUND']);
 
 function mapMarket(row) {
+  const status = row.status ?? 'open';
+  const payoutProcessed = Boolean(row.payout_processed ?? row.payoutProcessed ?? false);
+
   return {
     id: row.id,
     title: row.title,
@@ -16,9 +19,13 @@ function mapMarket(row) {
     createdBy: row.created_by ?? row.createdBy ?? null,
     createdAt: row.created_at ?? row.createdAt,
     closingTime: row.close_time ?? row.closingTime,
+    closedAt: row.closed_at ?? row.closedAt ?? null,
     settlementRule: row.settlement_rule ?? row.settlementRule ?? null,
-    status: row.status ?? 'open',
-    result: row.result ?? null
+    status,
+    result: row.result ?? null,
+    outcome: row.result ?? row.outcome ?? null,
+    payoutProcessed,
+    lifecycleStage: payoutProcessed ? 'PAID_OUT' : status.toUpperCase()
   };
 }
 
@@ -73,9 +80,11 @@ async function createMarket({
          created_by,
          created_at,
          close_time,
+         closed_at,
          settlement_rule,
          status,
-         result`,
+         result,
+         payout_processed`,
       [title, category, description, outcomeType, 0, 0, createdBy, closingTime, settlementRule, status, null]
     );
 
@@ -96,9 +105,12 @@ async function createMarket({
       createdBy,
       createdAt: new Date().toISOString(),
       closingTime,
+      closedAt: null,
       settlementRule,
       status,
-      result: null
+      result: null,
+      outcome: null,
+      payoutProcessed: false
     };
 
     inMemoryMarkets.unshift(market);
@@ -129,9 +141,11 @@ async function listMarkets({ category, sort = 'latest' } = {}) {
          created_by,
          created_at,
          close_time,
+         closed_at,
          settlement_rule,
          status,
-         result
+         result,
+         payout_processed
        FROM markets
        ${whereClause}
        ${orderByClause}`,
@@ -166,9 +180,11 @@ async function getMarketById(id) {
          created_by,
          created_at,
          close_time,
+         closed_at,
          settlement_rule,
          status,
-         result
+         result,
+         payout_processed
        FROM markets
        WHERE id = $1`,
       [id]
@@ -197,9 +213,11 @@ async function getMarketByIdForUpdate(client, id) {
        created_by,
        created_at,
        close_time,
+       closed_at,
        settlement_rule,
        status,
-       result
+       result,
+       payout_processed
      FROM markets
      WHERE id = $1
      FOR UPDATE`,
@@ -227,20 +245,22 @@ async function updateMarketPools(client, { marketId, yesPool, noPool, status }) 
        created_by,
        created_at,
        close_time,
+       closed_at,
        settlement_rule,
        status,
-       result`,
+       result,
+       payout_processed`,
     [marketId, yesPool, noPool, status ?? null]
   );
 
   return result.rows[0] ? mapMarket(result.rows[0]) : null;
 }
 
-async function settleMarket(client, { marketId, result: finalResult, status = 'settled' }) {
-  const queryResult = await client.query(
+async function closeMarket(client, { marketId, status = 'closed' }) {
+  const result = await client.query(
     `UPDATE markets
-     SET result = $2,
-         status = $3
+     SET status = $2,
+         closed_at = COALESCE(closed_at, NOW())
      WHERE id = $1
      RETURNING
        id,
@@ -253,10 +273,69 @@ async function settleMarket(client, { marketId, result: finalResult, status = 's
        created_by,
        created_at,
        close_time,
+       closed_at,
        settlement_rule,
        status,
-       result`,
-    [marketId, finalResult, status]
+       result,
+       payout_processed`,
+    [marketId, status]
+  );
+
+  return result.rows[0] ? mapMarket(result.rows[0]) : null;
+}
+
+async function settleMarket(client, { marketId, result: finalResult, status = 'settled', payoutProcessed = false }) {
+  const queryResult = await client.query(
+    `UPDATE markets
+     SET result = $2,
+         status = $3,
+         payout_processed = $4,
+         closed_at = COALESCE(closed_at, NOW())
+     WHERE id = $1
+     RETURNING
+       id,
+       title,
+       category,
+       description,
+       outcome_type,
+       yes_pool,
+       no_pool,
+       created_by,
+       created_at,
+       close_time,
+       closed_at,
+       settlement_rule,
+       status,
+       result,
+       payout_processed`,
+    [marketId, finalResult, status, payoutProcessed]
+  );
+
+  return queryResult.rows[0] ? mapMarket(queryResult.rows[0]) : null;
+}
+
+async function updateMarketCloseTime(client, { marketId, closeTime }) {
+  const queryResult = await client.query(
+    `UPDATE markets
+     SET close_time = $2
+     WHERE id = $1
+     RETURNING
+       id,
+       title,
+       category,
+       description,
+       outcome_type,
+       yes_pool,
+       no_pool,
+       created_by,
+       created_at,
+       close_time,
+       closed_at,
+       settlement_rule,
+       status,
+       result,
+       payout_processed`,
+    [marketId, closeTime]
   );
 
   return queryResult.rows[0] ? mapMarket(queryResult.rows[0]) : null;
@@ -268,5 +347,7 @@ module.exports = {
   getMarketById,
   getMarketByIdForUpdate,
   updateMarketPools,
-  settleMarket
+  closeMarket,
+  settleMarket,
+  updateMarketCloseTime
 };

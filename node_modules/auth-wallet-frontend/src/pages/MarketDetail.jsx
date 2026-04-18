@@ -148,7 +148,12 @@ function MarketDetail() {
               </div>
               <div>
                 <span>Status</span>
-                <strong>{market.status}</strong>
+                <strong>
+                  {market.status === "open" && "🟢 OPEN"}
+                  {market.status === "closed" && "🟡 CLOSED"}
+                  {market.status === "settled" && "🔴 SETTLED"}
+                  {!['open', 'closed', 'settled'].includes(market.status) && market.status}
+                </strong>
               </div>
               <div>
                 <span>Settlement</span>
@@ -170,7 +175,6 @@ function MarketDetail() {
                 <span className="eyebrow">Live activity</span>
                 <h2>Realtime feed</h2>
               </div>
-              <span className="muted">Socket.IO with polling fallback</span>
             </div>
 
             <div className="activity-list">

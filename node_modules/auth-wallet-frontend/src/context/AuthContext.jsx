@@ -5,6 +5,21 @@ const AuthContext = createContext(null);
 const TOKEN_STORAGE_KEY = 'auth_wallet_access_token';
 const USER_STORAGE_KEY = 'auth_wallet_user';
 
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+    return JSON.parse(decoded);
+  } catch (error) {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [accessToken, setAccessToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY));
   const [user, setUser] = useState(() => {
@@ -23,6 +38,9 @@ export function AuthProvider({ children }) {
       try {
         const data = await refreshAccessToken();
         persistToken(data.accessToken);
+        if (data.user) {
+          persistUser(data.user);
+        }
       } catch (error) {
         clearSession();
       } finally {
@@ -36,6 +54,21 @@ export function AuthProvider({ children }) {
   const persistToken = useCallback((token) => {
     setAccessToken(token);
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    const decoded = decodeJwtPayload(token);
+
+    if (decoded) {
+      setUser((currentUser) => {
+        const nextUser = {
+          ...(currentUser || {}),
+          id: decoded.id || decoded.sub || currentUser?.id,
+          name: decoded.name || currentUser?.name || currentUser?.username || 'Trader',
+          username: decoded.username || currentUser?.username || currentUser?.name || 'Trader',
+          role: decoded.role || currentUser?.role || 'user'
+        };
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
+        return nextUser;
+      });
+    }
   }, []);
 
   const persistUser = useCallback((nextUser) => {
@@ -79,14 +112,18 @@ export function AuthProvider({ children }) {
 
       const refreshed = await refreshAccessToken();
       persistToken(refreshed.accessToken);
+      if (refreshed.user) {
+        persistUser(refreshed.user);
+      }
       return requestFn(refreshed.accessToken);
     }
-  }, [accessToken, persistToken]);
+  }, [accessToken, persistToken, persistUser]);
 
   const value = useMemo(() => ({
     accessToken,
     user,
     isAuthenticated: Boolean(accessToken),
+    isAdmin: user?.role === 'admin',
     isBootstrapping,
     login,
     logout,

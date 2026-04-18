@@ -47,7 +47,7 @@ function DashboardPage() {
         <div className="dashboard-header">
           <div>
             <h1>Dashboard</h1>
-            <p className="muted">Welcome back, {wallet?.username || user?.username}.</p>
+            <p className="muted">Welcome back, {wallet?.name || user?.name || user?.username}.</p>
           </div>
           <button className="secondary-button" onClick={logout}>
             Log out
@@ -60,8 +60,8 @@ function DashboardPage() {
         {!isLoading && wallet ? (
           <div className="stats-grid">
             <div className="card-panel">
-              <span className="stat-label">Username</span>
-              <strong>{wallet.username}</strong>
+              <span className="stat-label">Name</span>
+              <strong>{wallet.name || user?.name || wallet.username}</strong>
             </div>
             <div className="card-panel">
               <span className="stat-label">Available balance</span>

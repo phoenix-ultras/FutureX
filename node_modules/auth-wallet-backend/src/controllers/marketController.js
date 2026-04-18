@@ -1,6 +1,7 @@
 const { matchedData } = require('express-validator');
 const marketModel = require('../models/marketModel');
 const tradeService = require('../services/tradeService');
+const auditService = require('../services/auditService');
 
 async function createMarket(req, res, next) {
   try {
@@ -20,7 +21,17 @@ async function createMarket(req, res, next) {
       outcomeType: 'YES_NO',
       settlementRule: payload.settlementRule?.trim() || 'Based on official result / API / manual admin input',
       status: payload.status?.trim() || 'open',
-      createdBy: req.user?.sub || null
+      createdBy: req.user?.id || req.user?.sub || null
+    });
+
+    await auditService.log(auditService.ACTIONS.MARKET_CREATED, {
+      userId: req.user?.id || req.user?.sub || null,
+      marketId: market.id,
+      metadata: {
+        title: market.title,
+        category: market.category,
+        closingTime: market.closingTime
+      }
     });
 
     console.log('Market created successfully', {

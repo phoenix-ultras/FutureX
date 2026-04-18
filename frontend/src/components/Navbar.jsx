@@ -4,7 +4,7 @@ import Tab from '@mui/material/Tab';
 import { useAuth } from '../context/AuthContext';
 
 function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -14,6 +14,7 @@ function Navbar() {
     if (path === '/') return '/';
     if (path.startsWith('/markets') || path.startsWith('/market/')) return '/markets';
     if (path.startsWith('/leaderboard')) return '/leaderboard';
+    if (path.startsWith('/admin')) return '/admin';
     if (path.startsWith('/profile')) return '/profile';
     return false;
   };
@@ -104,6 +105,26 @@ function Navbar() {
                 }
               }} 
             />
+            {isAdmin ? (
+              <Tab
+                value="/admin"
+                label="Admin"
+                disableRipple
+                sx={{
+                  color: currentTab === '/admin' ? '#00f5ff !important' : '#9ca3af',
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  fontSize: '0.95rem',
+                  letterSpacing: '0.5px',
+                  padding: '8px 16px',
+                  minHeight: '40px',
+                  "&:hover": {
+                    color: "#00e5ff",
+                    transition: "0.2s ease-in-out"
+                  }
+                }}
+              />
+            ) : null}
             <Tab 
               value="/profile" 
               label="Profile" 
@@ -130,8 +151,8 @@ function Navbar() {
           <div className="hidden sm:flex items-center gap-3 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700/50">
             <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
             <div className="flex flex-col justify-center">
-              <div className="text-white font-semibold text-sm leading-tight">{user?.username || 'Trader'}</div>
-              <div className="text-xs text-gray-400 leading-tight">Online terminal</div>
+              <div className="text-white font-semibold text-sm leading-tight">{user?.name || user?.username || 'Trader'}</div>
+              <div className="text-xs text-gray-400 leading-tight">{isAdmin ? 'Admin terminal' : 'Online terminal'}</div>
             </div>
           </div>
           <button 

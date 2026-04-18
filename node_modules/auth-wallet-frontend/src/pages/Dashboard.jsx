@@ -28,7 +28,7 @@ function Dashboard() {
         const [walletData, marketData, tradeData] = await Promise.all([
           withAccessToken((token) => getWallet(token)).catch((err) => { console.error('Dashboard: Wallet fetch failed', err); return null; }),
           getMarkets({ sort: 'latest' }).catch((err) => { console.error('Dashboard: Markets fetch failed', err); return { data: [] }; }),
-          getUserTrades(user.id).catch((err) => { console.error('Dashboard: Trades fetch failed', err); return { data: [] }; })
+          withAccessToken((token) => getUserTrades(user.id, token)).catch((err) => { console.error('Dashboard: Trades fetch failed', err); return { data: [] }; })
         ]);
 
         console.log('[DEBUG] Dashboard API Data:', { walletData, marketData, tradeData });

@@ -5,7 +5,10 @@ const socketService = require('../services/socketService');
 async function placeTrade(req, res, next) {
   try {
     const payload = matchedData(req, { locations: ['body'] });
-    const result = await tradeService.placeTrade(payload);
+    const result = await tradeService.placeTrade({
+      ...payload,
+      userId: req.user.id
+    });
 
     try {
       const io = socketService.getIO();

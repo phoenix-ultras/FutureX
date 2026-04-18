@@ -16,6 +16,7 @@ function mapTrade(row) {
     side: row.side,
     amount: Number(row.amount),
     oddsAtTrade: Number(row.odds_at_trade ?? row.oddsAtTrade),
+    status: row.status ?? 'ACTIVE',
     createdAt: row.created_at ?? row.createdAt
   };
 }
@@ -23,9 +24,9 @@ function mapTrade(row) {
 async function createTrade(client, { userId, marketId, side, amount, oddsAtTrade }) {
   if (client) {
     const result = await client.query(
-      `INSERT INTO trades (user_id, market_id, side, amount, odds_at_trade)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, user_id, market_id, side, amount, odds_at_trade, created_at`,
+      `INSERT INTO trades (user_id, market_id, side, amount, odds_at_trade, status)
+       VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+       RETURNING id, user_id, market_id, side, amount, odds_at_trade, status, created_at`,
       [userId, marketId, side, amount, oddsAtTrade]
     );
 
@@ -34,9 +35,9 @@ async function createTrade(client, { userId, marketId, side, amount, oddsAtTrade
 
   try {
     const result = await db.query(
-      `INSERT INTO trades (user_id, market_id, side, amount, odds_at_trade)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, user_id, market_id, side, amount, odds_at_trade, created_at`,
+      `INSERT INTO trades (user_id, market_id, side, amount, odds_at_trade, status)
+       VALUES ($1, $2, $3, $4, $5, 'ACTIVE')
+       RETURNING id, user_id, market_id, side, amount, odds_at_trade, status, created_at`,
       [userId, marketId, side, amount, oddsAtTrade]
     );
 
@@ -53,6 +54,7 @@ async function createTrade(client, { userId, marketId, side, amount, oddsAtTrade
       side,
       amount: Number(amount),
       oddsAtTrade: Number(oddsAtTrade),
+      status: 'ACTIVE',
       createdAt: new Date().toISOString()
     };
 
@@ -65,7 +67,7 @@ async function listTradesByMarketId(marketId, client = null) {
   try {
     const executor = client || db;
     const result = await executor.query(
-      `SELECT id, user_id, market_id, side, amount, odds_at_trade, created_at
+      `SELECT id, user_id, market_id, side, amount, odds_at_trade, status, created_at
        FROM trades
        WHERE market_id = $1
        ORDER BY created_at ASC`,
@@ -88,7 +90,7 @@ async function listTradesByUserId(userId, client = null) {
   try {
     const executor = client || db;
     const result = await executor.query(
-      `SELECT id, user_id, market_id, side, amount, odds_at_trade, created_at
+      `SELECT id, user_id, market_id, side, amount, odds_at_trade, status, created_at
        FROM trades
        WHERE user_id = $1
        ORDER BY created_at DESC`,
@@ -107,8 +109,97 @@ async function listTradesByUserId(userId, client = null) {
   }
 }
 
+async function listAllTrades() {
+  try {
+    const result = await db.query(
+      `SELECT id, user_id, market_id, side, amount, odds_at_trade, status, created_at
+       FROM trades
+       ORDER BY created_at DESC
+       LIMIT 500`
+    );
+
+    return result.rows.map(mapTrade);
+  } catch (error) {
+    if (!shouldUseMemoryFallback(error)) {
+      throw error;
+    }
+
+    return [...inMemoryTrades].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    );
+  }
+}
+
+async function findActiveTradeByUserAndMarket(userId, marketId, client = null) {
+  const executor = client || db;
+
+  try {
+    const result = await executor.query(
+      `SELECT id, user_id, market_id, side, amount, odds_at_trade, status, created_at
+       FROM trades
+       WHERE user_id = $1 AND market_id = $2 AND status = 'ACTIVE'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, marketId]
+    );
+
+    return result.rows[0] ? mapTrade(result.rows[0]) : null;
+  } catch (error) {
+    if (!shouldUseMemoryFallback(error)) {
+      throw error;
+    }
+
+    return inMemoryTrades.find(
+      (trade) => String(trade.userId) === String(userId) &&
+        String(trade.marketId) === String(marketId) &&
+        trade.status === 'ACTIVE'
+    ) || null;
+  }
+}
+
+async function findLatestTradeByUserId(userId, client = null) {
+  const executor = client || db;
+
+  try {
+    const result = await executor.query(
+      `SELECT id, user_id, market_id, side, amount, odds_at_trade, status, created_at
+       FROM trades
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    return result.rows[0] ? mapTrade(result.rows[0]) : null;
+  } catch (error) {
+    if (!shouldUseMemoryFallback(error)) {
+      throw error;
+    }
+
+    return [...inMemoryTrades]
+      .filter((trade) => String(trade.userId) === String(userId))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0] || null;
+  }
+}
+
+async function updateTradeStatus(client, { tradeId, status }) {
+  const result = await client.query(
+    `UPDATE trades
+     SET status = $2
+     WHERE id = $1
+     RETURNING id, user_id, market_id, side, amount, odds_at_trade, status, created_at`,
+    [tradeId, status]
+  );
+
+  return result.rows[0] ? mapTrade(result.rows[0]) : null;
+}
+
 module.exports = {
   createTrade,
   listTradesByMarketId,
-  listTradesByUserId
+  listTradesByUserId,
+  listAllTrades,
+  findActiveTradeByUserAndMarket,
+  findLatestTradeByUserId,
+  updateTradeStatus
 };

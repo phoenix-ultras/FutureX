@@ -5,7 +5,7 @@ async function getLeaderboard() {
     const result = await db.query(`
       SELECT
         u.id AS user_id,
-        u.username,
+        COALESCE(u.name, u.username) AS username,
         COUNT(t.id) AS total_trades,
         COALESCE(SUM(
           CASE

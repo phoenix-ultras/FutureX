@@ -19,10 +19,13 @@ function MarketCard({ market, compact = false }) {
           </div>
           <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
             market.status === 'open' ? 'bg-green-500/20 text-green-400' :
-            market.status === 'closed' ? 'bg-red-500/20 text-red-400' :
-            'bg-yellow-500/20 text-yellow-400'
+            market.status === 'closed' ? 'bg-yellow-500/20 text-yellow-400' :
+            'bg-red-500/20 text-red-400'
           }`}>
-            {market.status}
+            {market.status === "open" && "🟢 OPEN"}
+            {market.status === "closed" && "🟡 CLOSED"}
+            {market.status === "settled" && "🔴 SETTLED"}
+            {!['open', 'closed', 'settled'].includes(market.status) && market.status}
           </span>
         </div>
 

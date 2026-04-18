@@ -7,7 +7,13 @@ const { authLimiter } = require('../middleware/rateLimiters');
 const router = express.Router();
 
 const signupValidation = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 80 })
+    .withMessage('Name must be between 2 and 80 characters'),
   body('username')
+    .optional()
     .trim()
     .isLength({ min: 3, max: 30 })
     .withMessage('Username must be between 3 and 30 characters')
@@ -20,7 +26,15 @@ const signupValidation = [
     .normalizeEmail(),
   body('password')
     .isLength({ min: 8, max: 72 })
-    .withMessage('Password must be between 8 and 72 characters')
+    .withMessage('Password must be between 8 and 72 characters'),
+  body()
+    .custom((value) => {
+      if (!value?.name && !value?.username) {
+        throw new Error('Name is required');
+      }
+
+      return true;
+    })
 ];
 
 const loginValidation = [

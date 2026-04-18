@@ -8,6 +8,7 @@ import Markets from './pages/Markets';
 import MarketDetail from './pages/MarketDetail';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
+import AdminDashboard from './pages/AdminDashboard';
 import BackgroundOverlay from './components/BackgroundOverlay';
 
 function App() {
@@ -29,6 +30,14 @@ function App() {
         <Route path="/markets" element={<Markets />} />
         <Route path="/market/:id" element={<MarketDetail />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/profile" element={<Profile />} />
       </Route>
       <Route path="/dashboard" element={<Navigate to="/" replace />} />

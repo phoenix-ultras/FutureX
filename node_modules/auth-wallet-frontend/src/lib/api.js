@@ -41,6 +41,16 @@ async function request(path, options = {}) {
   return data;
 }
 
+export function authRequest(path, accessToken, options = {}) {
+  return request(path, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+}
+
 export function signup(payload) {
   return request('/api/auth/signup', {
     method: 'POST',
@@ -100,20 +110,51 @@ export function getMarketOdds(id) {
 }
 
 export function placeTrade(payload) {
-  return request('/trade/place', {
+  const { accessToken, ...body } = payload;
+  return authRequest('/trade/place', accessToken, {
     method: 'POST',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(body)
   });
 }
 
-export function getUserTrades(userId) {
-  return request(`/user/${userId}/trades`);
+export function getUserTrades(userId, accessToken) {
+  return authRequest(`/user/${userId}/trades`, accessToken);
 }
 
 export function getLeaderboard() {
   return request('/leaderboard');
 }
 
-export function getUserStats(userId) {
-  return request(`/user/${userId}/stats`);
+export function getUserStats(userId, accessToken) {
+  return authRequest(`/user/${userId}/stats`, accessToken);
+}
+
+export function getAdminDashboard(accessToken) {
+  return authRequest('/api/admin/dashboard', accessToken);
+}
+
+export function closeAdminMarket(id, accessToken) {
+  return authRequest(`/api/admin/market/close/${id}`, accessToken, {
+    method: 'POST'
+  });
+}
+
+export function settleAdminMarket(id, outcome, accessToken) {
+  return authRequest(`/api/admin/market/settle/${id}`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ outcome })
+  });
+}
+
+export function triggerAdminPayout(id, accessToken) {
+  return authRequest(`/api/admin/market/payout/${id}`, accessToken, {
+    method: 'POST'
+  });
+}
+
+export function updateAdminMarketCloseTime(id, closeTime, accessToken) {
+  return authRequest(`/api/admin/market/close-time/${id}`, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ closeTime })
+  });
 }

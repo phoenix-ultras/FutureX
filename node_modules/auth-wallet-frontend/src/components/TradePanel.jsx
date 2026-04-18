@@ -7,9 +7,12 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import CircularProgress from '@mui/material/CircularProgress';
+import { useAuth } from '../context/AuthContext';
+import { placeTrade } from '../lib/api';
 import { formatCoins, formatOdds, getMarketMetrics, isMarketTradeable } from '../lib/marketUtils';
 
 function TradePanel({ market, userId, onTradeExecuted }) {
+  const { accessToken } = useAuth();
   const [side, setSide] = useState('YES');
   const [amount, setAmount] = useState('100');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,26 +46,13 @@ function TradePanel({ market, userId, onTradeExecuted }) {
     const normalizedAmount = Number(amount);
 
     try {
-      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/trade`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId,
-          marketId: market.id,
-          side,
-          amount: normalizedAmount
-        })
+      const result = await placeTrade({
+        accessToken,
+        userId,
+        marketId: market.id,
+        side,
+        amount: normalizedAmount
       });
-
-      const result = await response.json();
-      console.log("Trade response:", result);
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Unable to execute trade.');
-      }
 
       setSuccess(result.message || `${side} trade confirmed for ${formatCoins(normalizedAmount)}.`);
       onTradeExecuted?.(result);

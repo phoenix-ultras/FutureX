@@ -2,16 +2,22 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const required = [
-  'DATABASE_URL',
-  'JWT_ACCESS_SECRET',
-  'JWT_REFRESH_SECRET'
-];
+const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
+const refreshSecret = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+const required = ['DATABASE_URL'];
 
 for (const key of required) {
   if (!process.env[key]) {
     throw new Error(`Missing required environment variable: ${key}`);
   }
+}
+
+if (!accessSecret) {
+  throw new Error('Missing required environment variable: JWT_ACCESS_SECRET or JWT_SECRET');
+}
+
+if (!refreshSecret) {
+  throw new Error('Missing required environment variable: JWT_REFRESH_SECRET or JWT_SECRET');
 }
 
 function maskSecret(value) {
@@ -47,8 +53,8 @@ function getSafeEnvSummary() {
     port: Number(process.env.PORT || 5000),
     clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     databaseUrl,
-    jwtAccessSecret: maskSecret(process.env.JWT_ACCESS_SECRET),
-    jwtRefreshSecret: maskSecret(process.env.JWT_REFRESH_SECRET)
+    jwtAccessSecret: maskSecret(accessSecret),
+    jwtRefreshSecret: maskSecret(refreshSecret)
   };
 }
 
@@ -56,8 +62,8 @@ module.exports = {
   port: Number(process.env.PORT || 5000),
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL,
-  jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
+  jwtAccessSecret: accessSecret,
+  jwtRefreshSecret: refreshSecret,
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || '15m',
   refreshTokenTtl: process.env.REFRESH_TOKEN_TTL || '7d',
   bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS || 12),

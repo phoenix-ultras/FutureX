@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { signup } from '../lib/api';
 
 const initialState = {
-  username: '',
+  name: '',
   email: '',
   password: '',
   confirmPassword: ''
@@ -16,12 +16,12 @@ function SignupPage() {
   const navigate = useNavigate();
 
   const validationMessage = useMemo(() => {
-    if (!form.username) {
+    if (!form.name) {
       return '';
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(form.username)) {
-      return 'Username may contain only letters, numbers, and underscores.';
+    if (form.name.trim().length < 2) {
+      return 'Name must be at least 2 characters.';
     }
 
     if (form.password && form.password.length < 8) {
@@ -48,7 +48,7 @@ function SignupPage() {
 
     try {
       await signup({
-        username: form.username,
+        name: form.name,
         email: form.email,
         password: form.password
       });
@@ -74,17 +74,17 @@ function SignupPage() {
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="username" className="block text-sm font-semibold text-white mb-2">Username</label>
+            <label htmlFor="name" className="block text-sm font-semibold text-white mb-2">Name</label>
             <input
-              id="username"
+              id="name"
               type="text"
-              value={form.username}
-              onChange={(event) => setForm({ ...form, username: event.target.value })}
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
               className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-neon-green focus:ring-2 focus:ring-neon-green/20 outline-none transition-all"
-              placeholder="Choose a username"
+              placeholder="Enter your full name"
               required
-              minLength={3}
-              maxLength={30}
+              minLength={2}
+              maxLength={80}
             />
           </div>
 

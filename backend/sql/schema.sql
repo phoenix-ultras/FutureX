@@ -3,8 +3,10 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(30) NOT NULL UNIQUE,
+    name VARCHAR(80) NOT NULL DEFAULT 'Trader',
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -28,9 +30,11 @@ CREATE TABLE IF NOT EXISTS markets (
     no_pool NUMERIC(18, 2) NOT NULL DEFAULT 0,
     created_by TEXT,
     close_time TIMESTAMPTZ NOT NULL,
+    closed_at TIMESTAMPTZ,
     settlement_rule TEXT,
     status VARCHAR(50) NOT NULL,
     result VARCHAR(10),
+    payout_processed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -44,9 +48,37 @@ CREATE TABLE IF NOT EXISTS transactions (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL CHECK (type IN ('BET', 'WIN', 'LOSS')),
     amount NUMERIC(18, 2) NOT NULL,
+    market_id INTEGER REFERENCES markets(id) ON DELETE SET NULL,
     reference_id VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
+
+CREATE TABLE IF NOT EXISTS trades (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    market_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+    side VARCHAR(3) NOT NULL CHECK (side IN ('YES', 'NO')),
+    amount NUMERIC(18, 2) NOT NULL CHECK (amount > 0),
+    odds_at_trade NUMERIC(18, 6) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'WON', 'LOST', 'CANCELLED')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_user_id_created_at ON trades(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trades_market_id ON trades(market_id);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    market_id INTEGER REFERENCES markets(id) ON DELETE SET NULL,
+    action_type VARCHAR(50) NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_market_id ON audit_logs(market_id);

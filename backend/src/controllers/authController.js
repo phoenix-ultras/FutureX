@@ -17,7 +17,7 @@ function getRefreshCookieOptions() {
 async function signup(req, res, next) {
   try {
     console.log('Signup request received', {
-      username: req.body?.username,
+      name: req.body?.name || req.body?.username,
       email: req.body?.email
     });
 
