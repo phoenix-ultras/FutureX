@@ -8,6 +8,7 @@ const tradeRoutes = require('./routes/tradeRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const squadRoutes = require('./routes/squadRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiters');
 const env = require('./config/env');
@@ -48,6 +49,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/leaderboard', leaderboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/squads', squadRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });

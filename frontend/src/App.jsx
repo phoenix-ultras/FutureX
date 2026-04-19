@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -8,15 +9,37 @@ import Markets from './pages/Markets';
 import MarketDetail from './pages/MarketDetail';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
+import Squads from './pages/Squads';
+import SquadDetail from './pages/SquadDetail';
+import Crypto from './pages/Crypto';
+import FraudShield from './pages/FraudShield';
 import AdminDashboard from './pages/AdminDashboard';
 import BackgroundOverlay from './components/BackgroundOverlay';
+import CustomCursor from './components/CustomCursor';
+import LoadingScreen from './components/LoadingScreen';
 
 function App() {
+  const [showLoading, setShowLoading] = useState(true);
+
+  if (showLoading) {
+    return (
+      <div className="relative min-h-screen">
+        <BackgroundOverlay animated={false} />
+        <CustomCursor />
+        <div className="relative z-10" id="app">
+          <LoadingScreen onComplete={() => setShowLoading(false)} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative min-h-screen bg-[#0a0a0a]">
+    <div className="relative min-h-screen">
       <BackgroundOverlay animated={true} />
-      <div className="relative z-10">
+      <CustomCursor />
+      <div className="relative z-10" id="app">
         <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route
@@ -26,10 +49,14 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/markets" element={<Markets />} />
         <Route path="/market/:id" element={<MarketDetail />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/squads" element={<Squads />} />
+        <Route path="/squads/:id" element={<SquadDetail />} />
+        <Route path="/crypto" element={<Crypto />} />
+        <Route path="/fraud" element={<FraudShield />} />
         <Route
           path="/admin"
           element={
@@ -40,11 +67,10 @@ function App() {
         />
         <Route path="/profile" element={<Profile />} />
       </Route>
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route
         path="*"
         element={
-          <Navigate to="/" replace />
+          <Navigate to="/login" replace />
         }
       />
     </Routes>

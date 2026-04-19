@@ -1,50 +1,43 @@
-import { useMemo, useState } from 'react';
-import Button from '@mui/material/Button';
-import TextField from '@mui/material/TextField';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
-import CircularProgress from '@mui/material/CircularProgress';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { placeTrade } from '../lib/api';
 import { formatCoins, formatOdds, getMarketMetrics, isMarketTradeable } from '../lib/marketUtils';
 
 function TradePanel({ market, userId, onTradeExecuted }) {
   const { accessToken } = useAuth();
+  const location = useLocation();
   const [side, setSide] = useState('YES');
   const [amount, setAmount] = useState('100');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const metrics = useMemo(() => getMarketMetrics(market), [market]);
   const tradeable = isMarketTradeable(market);
 
-  function handleOpenConfirm(event) {
-    event.preventDefault();
+  // Auto-select side if passed in via navigation state
+  useEffect(() => {
+    if (location.state?.autoOpenTrade) {
+      setSide(location.state.autoOpenTrade.toUpperCase());
+    }
+  }, [location.state]);
+
+  const handleAddAmount = (addVal) => {
+    setAmount((prev) => String(Number(prev) + addVal));
+  };
+
+  const executeTrade = async () => {
     setError('');
     setSuccess('');
-
+    
     const normalizedAmount = Number(amount);
     if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
       setError('Enter a valid trade amount.');
       return;
     }
-    setIsConfirmOpen(true);
-  }
 
-  function handleCloseConfirm() {
-    setIsConfirmOpen(false);
-  }
-
-  async function executeTrade() {
-    setIsConfirmOpen(false);
     setIsSubmitting(true);
-    const normalizedAmount = Number(amount);
-
     try {
       const result = await placeTrade({
         accessToken,
@@ -53,7 +46,6 @@ function TradePanel({ market, userId, onTradeExecuted }) {
         side,
         amount: normalizedAmount
       });
-
       setSuccess(result.message || `${side} trade confirmed for ${formatCoins(normalizedAmount)}.`);
       onTradeExecuted?.(result);
       setAmount('100');
@@ -62,112 +54,59 @@ function TradePanel({ market, userId, onTradeExecuted }) {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
-    <section className="panel trade-panel">
-      <div className="trade-panel-head">
-        <div>
-          <span className="eyebrow">Trade ticket</span>
-          <h2>Place position</h2>
-        </div>
-        <span className={`socket-badge ${tradeable ? 'socket-live' : 'socket-offline'}`}>
-          {tradeable ? 'Market live' : 'Trading paused'}
-        </span>
+    <div className="trade-modal" style={{ position: 'relative', width: '100%', maxWidth: 'none', margin: '0' }}>
+      <div className="modal-title">TRADE: {market.title}</div>
+      <div className="modal-sub">
+        {tradeable ? 'Select your prediction and trade amount' : 'Trading is currently paused'}
       </div>
 
-      <div className="odds-grid">
-        <button
-          className={`odds-option ${side === 'YES' ? 'odds-option-active yes' : ''}`}
-          type="button"
-          onClick={() => setSide('YES')}
+      <div className="choice-grid">
+        <div 
+          className={`choice-card yes ${side === 'YES' ? 'sel' : ''}`} 
+          onClick={() => tradeable && setSide('YES')}
         >
-          <span>YES</span>
-          <strong>{formatOdds(metrics.yesOdds)}</strong>
-        </button>
-        <button
-          className={`odds-option ${side === 'NO' ? 'odds-option-active no' : ''}`}
-          type="button"
-          onClick={() => setSide('NO')}
+          YES
+          <div className="choice-odds">{formatOdds(metrics.yesOdds)}🪙</div>
+        </div>
+        <div 
+          className={`choice-card no ${side === 'NO' ? 'sel' : ''}`} 
+          onClick={() => tradeable && setSide('NO')}
         >
-          <span>NO</span>
-          <strong>{formatOdds(metrics.noOdds)}</strong>
-        </button>
+          NO
+          <div className="choice-odds">{formatOdds(metrics.noOdds)}🪙</div>
+        </div>
       </div>
 
-      <form className="trade-form" onSubmit={handleOpenConfirm}>
-        <TextField
-          id="trade-amount"
-          label="Amount"
-          type="number"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          disabled={!tradeable || isSubmitting}
-          fullWidth
-          variant="outlined"
-          InputLabelProps={{ shrink: true, className: '!text-gray-400' }}
-          inputProps={{ min: 1, step: 1 }}
-          className="!mb-4"
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              color: 'white',
-              '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
-              '&:hover fieldset': { borderColor: 'rgba(0, 245, 255, 0.5)' },
-              '&.Mui-focused fieldset': { borderColor: '#00f5ff' },
-            }
-          }}
-        />
+      <div className="quick-row">
+        <button type="button" className="qbtn" onClick={() => handleAddAmount(10)} disabled={!tradeable}>+10</button>
+        <button type="button" className="qbtn" onClick={() => handleAddAmount(50)} disabled={!tradeable}>+50</button>
+        <button type="button" className="qbtn" onClick={() => handleAddAmount(100)} disabled={!tradeable}>+100</button>
+        <button type="button" className="qbtn" onClick={() => handleAddAmount(500)} disabled={!tradeable}>+500</button>
+      </div>
 
-        <div className="trade-summary">
-          <span>Side</span>
-          <strong>{side}</strong>
-          <span>Potential multiplier</span>
-          <strong>{formatOdds(side === 'YES' ? metrics.yesOdds : metrics.noOdds)}</strong>
-        </div>
+      <input 
+        type="number" 
+        className="amount-field" 
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        disabled={!tradeable || isSubmitting}
+        min="1"
+      />
 
-        {error ? <div className="form-error">{error}</div> : null}
-        {success ? <div className="info-banner">{success}</div> : null}
+      {error && <div className="form-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {success && <div className="info-banner" style={{ marginBottom: '1rem' }}>{success}</div>}
 
-        <Button 
-          className="!w-full !mt-4 !text-black !bg-cyan-400 hover:!bg-cyan-300"
-          disabled={!tradeable || isSubmitting || !userId} 
-          type="submit"
-          variant="contained"
-          startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : null}
-          sx={{
-            fontSize: "1.05rem",
-            fontWeight: 800,
-            letterSpacing: "1px",
-            textTransform: "uppercase",
-            padding: "14px 26px",
-            minHeight: 52
-          }}
-        >
-          {isSubmitting ? 'Executing...' : `Buy ${side}`}
-        </Button>
-      </form>
-
-      <Dialog 
-        open={isConfirmOpen} 
-        onClose={handleCloseConfirm}
-        PaperProps={{
-          className: "!bg-gray-900 !text-white !border !border-gray-700/50"
-        }}
+      <button 
+        className="btn-neon" 
+        onClick={executeTrade}
+        disabled={!tradeable || isSubmitting || !userId}
       >
-        <DialogTitle>Confirm Trade</DialogTitle>
-        <DialogContent>
-          <DialogContentText className="!text-gray-300">
-            Are you sure you want to buy {formatCoins(Number(amount))} of {side} on this market?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseConfirm} className="!text-gray-400">Cancel</Button>
-          <Button onClick={executeTrade} variant="contained" className="!bg-cyan-500 !text-black hover:!bg-cyan-400" autoFocus>
-            Confirm Trade
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </section>
+        {isSubmitting ? 'EXECUTING...' : `CONFIRM TRADE`}
+      </button>
+    </div>
   );
 }
 

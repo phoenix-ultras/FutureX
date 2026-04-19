@@ -26,10 +26,10 @@ function Navbar() {
       <nav className="flex items-center justify-between h-20 px-6 max-w-[1440px] mx-auto w-full">
         {/* Left Section (Logo) */}
         <div className="flex items-center">
-          <Link className="flex items-center gap-3" to="/">
+          <Link className="flex items-center gap-3" to="/dashboard">
             <span className="text-3xl font-bold text-neon-green leading-none">NPX</span>
             <div className="hidden sm:flex flex-col justify-center">
-              <div className="text-white font-semibold leading-tight text-base">Neon Prediction Exchange</div>
+              <div className="text-white font-semibold leading-tight text-base">Future</div>
               <div className="text-sm text-gray-400 leading-tight">Realtime signal desk</div>
             </div>
           </Link>
@@ -38,7 +38,7 @@ function Navbar() {
         {/* Center Section (MUI Tabs) */}
         <div className="hidden md:flex items-center">
           <Tabs 
-            value={currentTab} 
+            value={currentTab === '/' ? '/dashboard' : currentTab} 
             onChange={(e, newValue) => navigate(newValue)}
             TabIndicatorProps={{ 
               style: { 
@@ -52,11 +52,11 @@ function Navbar() {
             }}
           >
             <Tab 
-              value="/" 
+              value="/dashboard" 
               label="Dashboard" 
               disableRipple
               sx={{ 
-                color: currentTab === '/' ? '#00f5ff !important' : '#9ca3af', 
+                color: (currentTab === '/' || currentTab === '/dashboard') ? '#00f5ff !important' : '#9ca3af', 
                 fontWeight: 600, 
                 textTransform: 'none', 
                 fontSize: '0.95rem',

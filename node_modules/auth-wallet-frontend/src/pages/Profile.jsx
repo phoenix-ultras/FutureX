@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import StatsCard from '../components/StatsCard';
+import BuyCoinsModal from '../components/BuyCoinsModal';
 import { useAuth } from '../context/AuthContext';
 import { getMarkets, getUserStats, getUserTrades, getWallet } from '../lib/api';
 import { formatClosingTime, formatCoins, formatPercentage } from '../lib/marketUtils';
 import { buildUserStats } from '../lib/statHelpers';
+
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, RadialLinearScale, BarElement, Filler, RadarController } from 'chart.js';
+import { Line, Bar, Radar } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, RadialLinearScale, BarElement, Filler, RadarController);
 
 function Profile() {
   const { user, withAccessToken, clearSession } = useAuth();
@@ -13,6 +19,16 @@ function Profile() {
   const [markets, setMarkets] = useState([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+
+  const fetchWallet = async () => {
+    try {
+      const walletData = await withAccessToken((token) => getWallet(token));
+      if (walletData) setWallet(walletData);
+    } catch (err) {
+      console.error('Failed to refresh wallet', err);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -83,106 +99,210 @@ function Profile() {
       .slice(0, 8);
   }, [markets, trades]);
 
+  const lineData = useMemo(() => {
+    let b = 1000;
+    const labs = ['Start'];
+    const vals = [b];
+    
+    const recentTrades = [...trades].reverse().slice(0, 10).reverse();
+    recentTrades.forEach((t, i) => {
+      let pnl = 0;
+      if (t.status === 'WIN') pnl = (t.payout || 0) - (t.amount || 0);
+      else if (t.status === 'LOSS') pnl = -(t.amount || 0);
+      
+      b += pnl;
+      labs.push('T' + (i + 1));
+      vals.push(Math.max(0, b));
+    });
+    
+    if (vals.length === 1 && wallet) {
+      labs.push('Now');
+      vals.push(wallet.balance || wallet.availableBalance);
+    }
+    
+    return {
+      labels: labs,
+      datasets: [{
+        data: vals,
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139,92,246,.08)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 3,
+        pointBackgroundColor: '#8b5cf6'
+      }]
+    };
+  }, [trades, wallet]);
+
+  const barData = useMemo(() => {
+    return {
+      labels: ['Wins', 'Losses', 'Pending'],
+      datasets: [{
+        data: [stats.wins, stats.losses, stats.openTrades],
+        backgroundColor: ['rgba(0,255,136,.5)', 'rgba(255,51,102,.5)', 'rgba(139,92,246,.5)'],
+        borderColor: ['#00ff88', '#ff3366', '#8b5cf6'],
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    };
+  }, [stats]);
+
+  const radarData = useMemo(() => {
+    return {
+      labels: ['Win Rate', 'Volume', 'Profit', 'Streak', 'Activity'],
+      datasets: [{
+        data: [
+          Math.round(stats.winRate),
+          Math.min(100, Math.round(stats.totalVolume / 100)),
+          Math.min(100, Math.max(0, stats.realizedPnl) / 20),
+          Math.min(100, (stats.longestWinStreak || 0) * 15),
+          Math.min(100, trades.length * 5)
+        ],
+        backgroundColor: 'rgba(0,245,255,.08)',
+        borderColor: 'rgba(0,245,255,.6)',
+        borderWidth: 2,
+        pointBackgroundColor: '#00f5ff',
+        pointRadius: 4
+      }]
+    };
+  }, [stats, trades.length]);
+
+  const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+  const lineOptions = { ...chartOptions, scales: { x: { ticks: { color: '#4a6080' }, grid: { color: 'rgba(255,255,255,.03)' } }, y: { ticks: { color: '#4a6080' }, grid: { color: 'rgba(255,255,255,.03)' } } } };
+  const barOptions = { ...chartOptions, scales: { x: { ticks: { color: '#4a6080' }, grid: { display: false } }, y: { ticks: { color: '#4a6080' }, grid: { color: 'rgba(255,255,255,.03)' } } } };
+  const radarOptions = { ...chartOptions, scales: { r: { ticks: { display: false, stepSize: 25 }, grid: { color: 'rgba(255,255,255,.06)' }, angleLines: { color: 'rgba(255,255,255,.06)' }, pointLabels: { color: '#4a6080', font: { size: 11 } } } } };
+
   return (
-    <section className="page-section">
-      <div className="section-hero">
+    <div className="page">
+      <div className="page-hdr">
         <div>
-          <span className="eyebrow">Trader profile</span>
-          <h1 className="hero-title">{user?.name || user?.username}&apos;s performance cockpit</h1>
-          <p className="muted">Wallet state, trade history, and settled performance all in one view.</p>
+          <h1 className="page-title">WALLET & PROFILE</h1>
+          <div className="page-sub">Performance cockpit for {user?.name || user?.username}</div>
         </div>
       </div>
 
-      {error ? <div className="form-error">{error}</div> : null}
-      {isLoading ? <div className="panel loading-panel">Loading profile telemetry...</div> : null}
+      {error && <div className="form-error mb-4">{error}</div>}
 
-      {!isLoading ? (
+      <BuyCoinsModal 
+        isOpen={isBuyModalOpen} 
+        onClose={() => setIsBuyModalOpen(false)} 
+        onSuccess={fetchWallet} 
+      />
+
+      {!isLoading && (
         <>
-          <div className="stats-grid">
-            <StatsCard label="Wallet balance" value={formatCoins(wallet?.balance || 0)} />
-            <StatsCard label="Locked balance" value={formatCoins(wallet?.lockedBalance || 0)} accent="purple" />
-            <StatsCard label="Win rate" value={formatPercentage(stats.winRate || 0)} accent="pink" />
-            <StatsCard label="Current streak" value={stats.currentStreak || 0} helper="Settled wins in a row" />
+          <div className="stats-row">
+            <div className="scard cyan relative group">
+              <div className="scard-glow"></div>
+              <div className="flex justify-between items-start">
+                <div className="scard-label">WALLET BALANCE</div>
+                <button 
+                  onClick={() => setIsBuyModalOpen(true)}
+                  className="bg-neon-green/20 hover:bg-neon-green/40 text-neon-green p-1.5 rounded-lg transition-colors border border-neon-green/30 text-xs font-bold flex items-center gap-1"
+                >
+                  <span>+</span> BUY
+                </button>
+              </div>
+              <div className="scard-val mt-2">{formatCoins(wallet?.balance || 0)}</div>
+            </div>
+            <div className="scard purple">
+              <div className="scard-glow"></div>
+              <div className="scard-label">LOCKED FUNDS</div>
+              <div className="scard-val">{formatCoins(wallet?.lockedBalance || 0)}</div>
+            </div>
+            <div className="scard green">
+              <div className="scard-glow"></div>
+              <div className="scard-label">WIN RATE</div>
+              <div className="scard-val">{formatPercentage(stats.winRate || 0)}</div>
+            </div>
+            <div className="scard pink">
+              <div className="scard-glow"></div>
+              <div className="scard-label">CURRENT STREAK</div>
+              <div className="scard-val">{stats.currentStreak || 0}</div>
+            </div>
           </div>
 
-          <div className="profile-grid">
-            <section className="panel">
-              <div className="section-header">
-                <div>
-                  <span className="eyebrow">Performance summary</span>
-                  <h2>Signal quality</h2>
-                </div>
+          <div className="g2" style={{ marginBottom: '1.5rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="gcard">
+              <div className="section-hdr"><div className="section-title">BALANCE CURVE</div></div>
+              <div className="chart-wrap" style={{ position: 'relative', height: '220px' }}>
+                <Line data={lineData} options={lineOptions} />
               </div>
-
-              <div className="profile-list">
-                <div>
-                  <span>Wins</span>
-                  <strong>{stats.wins}</strong>
-                </div>
-                <div>
-                  <span>Losses</span>
-                  <strong>{stats.losses}</strong>
-                </div>
-                <div>
-                  <span>Open trades</span>
-                  <strong>{stats.openTrades}</strong>
-                </div>
-                <div>
-                  <span>Total volume</span>
-                  <strong>{formatCoins(stats.totalVolume)}</strong>
-                </div>
-                <div>
-                  <span>Realized PnL</span>
-                  <strong>{formatCoins(stats.realizedPnl)}</strong>
-                </div>
-                <div>
-                  <span>Longest win streak</span>
-                  <strong>{stats.longestWinStreak}</strong>
-                </div>
+            </div>
+            <div className="gcard">
+              <div className="section-hdr"><div className="section-title">WIN/LOSS RATIO</div></div>
+              <div className="chart-wrap" style={{ position: 'relative', height: '220px' }}>
+                <Bar data={barData} options={barOptions} />
               </div>
-            </section>
+            </div>
+          </div>
 
-            <section className="panel">
-              <div className="section-header">
-                <div>
-                  <span className="eyebrow">Trade history</span>
-                  <h2>Recent executions</h2>
-                </div>
+          <div className="gcard" style={{ marginBottom: '1.5rem' }}>
+            <div className="section-hdr"><div className="section-title">PERFORMANCE RADAR</div></div>
+            <div className="chart-wrap" style={{ position: 'relative', height: '300px' }}>
+               <Radar data={radarData} options={radarOptions} />
+            </div>
+          </div>
+
+          <div className="dash-grid">
+            <div className="gcard">
+              <div className="section-hdr">
+                <div className="section-title">📊 SIGNAL QUALITY</div>
               </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="prof-row"><span className="prof-key">Wins</span> <span className="prof-val">{stats.wins}</span></div>
+                <div className="prof-row"><span className="prof-key">Losses</span> <span className="prof-val">{stats.losses}</span></div>
+                <div className="prof-row"><span className="prof-key">Open Trades</span> <span className="prof-val">{stats.openTrades}</span></div>
+                <div className="prof-row"><span className="prof-key">Total Volume</span> <span className="prof-val" style={{color: 'var(--cyan)'}}>{formatCoins(stats.totalVolume)}</span></div>
+                <div className="prof-row"><span className="prof-key">Realized PnL</span> <span className="prof-val" style={{color: stats.realizedPnl >= 0 ? 'var(--green)' : 'var(--red)'}}>{formatCoins(stats.realizedPnl)}</span></div>
+                <div className="prof-row"><span className="prof-key">Longest Streak</span> <span className="prof-val">{stats.longestWinStreak}</span></div>
+              </div>
+            </div>
 
-              <div className="trade-history">
-                {settledMarkets.length ? (
-                  settledMarkets.map((trade) => (
-                    <div className="trade-history-item" key={trade.id}>
-                      <div>
-                        <strong>{trade.market?.title || `Market #${trade.marketId}`}</strong>
-                        <span>
-                          {trade.side} | {formatCoins(trade.amount)} | {trade.market ? formatClosingTime(trade.market.closingTime) : 'Unknown close'}
-                        </span>
+            <div className="gcard">
+              <div className="section-hdr">
+                <div className="section-title">⚡ RECENT EXECUTIONS</div>
+              </div>
+              
+              <div className="trade-list">
+                {settledMarkets.length ? settledMarkets.map((trade) => {
+                  const isSettled = trade.market?.status?.toLowerCase() === 'settled';
+                  const isClosed = trade.market?.status?.toLowerCase() === 'closed';
+                  const isWin = isSettled && trade.side === trade.market?.result;
+                  const iconCls = isWin ? 'win' : isSettled ? 'loss' : 'pending';
+                  const iconChar = isWin ? '📈' : isSettled ? '📉' : '⏳';
+                  const textCls = isWin ? 'win' : isSettled ? 'loss' : 'pending';
+                  const amtSign = isWin ? '+' : isSettled ? '-' : '';
+
+                  return (
+                    <div className="trow" key={trade.id}>
+                      <div className={`trow-icon ${iconCls}`}>{iconChar}</div>
+                      <div className="trow-info">
+                        <div className="trow-market" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+                          {trade.market?.title || `Market #${trade.marketId}`}
+                        </div>
+                        <div className="trow-meta">
+                          {trade.side} | Odds {Number(trade.oddsAtTrade).toFixed(2)}x | {isWin ? 'WIN' : isSettled ? 'LOSS' : isClosed ? 'WAITING' : 'ACTIVE'}
+                        </div>
                       </div>
-                      <div className="trade-history-meta flex flex-col items-end gap-2">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                          trade.market?.status?.toLowerCase() === 'settled' 
-                            ? (trade.side === trade.market?.result ? 'bg-green-500/20 text-neon-green border border-neon-green/30' : 'bg-red-500/20 text-red-400 border border-red-500/30') 
-                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-gray-700/50 text-gray-300')
-                        }`}>
-                          {trade.market?.status?.toLowerCase() === 'settled' 
-                            ? (trade.side === trade.market?.result ? 'WIN' : 'LOSS')
-                            : (trade.market?.status?.toLowerCase() === 'closed' ? 'WAITING' : 'ACTIVE')}
-                        </span>
-                        <span className="text-sm text-gray-400">Odds {Number(trade.oddsAtTrade).toFixed(2)}x</span>
+                      <div className={`trow-amt ${textCls}`}>
+                        {amtSign}{formatCoins(trade.amount)}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="panel-note">No trades yet. Your executions will appear here.</div>
+                  );
+                }) : (
+                  <div className="empty">
+                    <div className="empty-txt">No trades found.</div>
+                  </div>
                 )}
               </div>
-            </section>
+            </div>
           </div>
         </>
-      ) : null}
-    </section>
+      )}
+    </div>
   );
 }
 

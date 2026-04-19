@@ -1,18 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
 import { closeAdminMarket, getAdminDashboard, settleAdminMarket, triggerAdminPayout, updateAdminMarketCloseTime } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
-const sidebarItems = ['Markets', 'Users', 'Wallet Control', 'Results'];
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 function AdminDashboard() {
-  const { withAccessToken } = useAuth();
+  const { withAccessToken, logout } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState({ markets: [], users: [], trades: [] });
   const [activeSection, setActiveSection] = useState('Markets');
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [busyMarketId, setBusyMarketId] = useState(null);
-  const [closeTimeInputs, setCloseTimeInputs] = useState({});
 
   async function loadDashboard() {
     setIsLoading(true);
@@ -21,16 +32,6 @@ function AdminDashboard() {
     try {
       const response = await withAccessToken((token) => getAdminDashboard(token));
       setData(response.data);
-      
-      const initialCloseTimes = {};
-      response.data.markets.forEach((m) => {
-        if (m.closingTime) {
-          const date = new Date(m.closingTime);
-          const localString = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-          initialCloseTimes[m.id] = localString;
-        }
-      });
-      setCloseTimeInputs(initialCloseTimes);
     } catch (requestError) {
       setError(requestError.data?.message || 'Unable to load admin dashboard.');
     } finally {
@@ -41,10 +42,6 @@ function AdminDashboard() {
   useEffect(() => {
     loadDashboard();
   }, []);
-
-  function handleCloseTimeChange(marketId, value) {
-    setCloseTimeInputs((prev) => ({ ...prev, [marketId]: value }));
-  }
 
   async function handleAdminAction(marketId, action, payload = null) {
     setBusyMarketId(marketId);
@@ -58,9 +55,7 @@ function AdminDashboard() {
         response = await withAccessToken((token) => closeAdminMarket(marketId, token));
       } else if (action === 'settle') {
         response = await withAccessToken((token) => settleAdminMarket(marketId, payload, token));
-      } else if (action === 'updateTime') {
-        response = await withAccessToken((token) => updateAdminMarketCloseTime(marketId, payload, token));
-      } else {
+      } else if (action === 'payout') {
         response = await withAccessToken((token) => triggerAdminPayout(marketId, token));
       }
 
@@ -76,176 +71,276 @@ function AdminDashboard() {
     }
   }
 
-  const recentTrades = useMemo(() => data.trades.slice(0, 10), [data.trades]);
+  const categoryCounts = useMemo(() => {
+    const counts = {};
+    data.markets.forEach(m => {
+      const cat = m.category || 'Other';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [data.markets]);
+
+  const barData = useMemo(() => {
+    return {
+      labels: Object.keys(categoryCounts),
+      datasets: [{
+        label: 'Active Markets',
+        data: Object.values(categoryCounts),
+        backgroundColor: 'rgba(0, 245, 255, 0.5)',
+        borderColor: '#00f5ff',
+        borderWidth: 1,
+        borderRadius: 4
+      }]
+    };
+  }, [categoryCounts]);
+
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#4a6080', font: { family: "'Share Tech Mono', monospace" } } },
+      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#4a6080', font: { family: "'Share Tech Mono', monospace" } } }
+    }
+  };
+
+  const totalVolume = useMemo(() => {
+    return data.markets.reduce((acc, m) => acc + (Number(m.yesPool) || 0) + (Number(m.noPool) || 0), 0);
+  }, [data.markets]);
 
   return (
-    <section className="page-section">
-      <div className="section-hero">
+    <div className="page">
+      <div className="page-hdr">
         <div>
-          <span className="eyebrow">Admin control</span>
-          <h1 className="hero-title">Market operations dashboard</h1>
-          <p className="muted">Close markets, settle results, run payouts, and inspect users and trade flow.</p>
+          <h1 className="page-title">ADMIN CONTROL CENTER</h1>
+          <div className="page-sub">Global platform management and settlement overrides</div>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div className="live-pulse">
+            <span className="pulse-dot" style={{ background: 'var(--red)' }}></span> GOD MODE
+          </div>
+          <button className="admin-btn danger" onClick={async () => {
+            await logout();
+            navigate('/login');
+          }}>
+            LOGOUT
+          </button>
         </div>
       </div>
 
-      {error ? <div className="form-error">{error}</div> : null}
-      {statusMessage ? <div className="info-banner">{statusMessage}</div> : null}
-      {isLoading ? <div className="panel loading-panel">Loading admin controls...</div> : null}
+      {error ? <div className="form-error mb-4">{error}</div> : null}
+      {statusMessage ? <div className="info-banner mb-4" style={{ color: 'var(--green)', border: '1px solid var(--green)', padding: '1rem', background: 'rgba(0,255,136,0.1)' }}>{statusMessage}</div> : null}
 
-      {!isLoading ? (
-        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <aside className="panel">
-            <div className="space-y-3">
-              {sidebarItems.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setActiveSection(item)}
-                  className={`w-full rounded-lg border px-4 py-3 text-left transition ${
-                    activeSection === item
-                      ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300'
-                      : 'border-gray-700/50 bg-gray-900/40 text-gray-300 hover:border-cyan-500/50'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <div className="space-y-6">
-            <section className="panel overflow-x-auto">
-              <div className="section-header">
-                <div>
-                  <span className="eyebrow">Markets</span>
-                  <h2>Market table</h2>
-                </div>
-              </div>
-              <table className="w-full min-w-[760px] text-sm text-left">
-                <thead className="text-gray-400">
-                  <tr>
-                    <th className="pb-3">Market</th>
-                    <th className="pb-3">Status</th>
-                    <th className="pb-3">Outcome</th>
-                    <th className="pb-3">Pools</th>
-                    <th className="pb-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.markets.map((market) => (
-                    <tr key={market.id} className="border-t border-gray-800/70">
-                      <td className="py-4">
-                        <div className="font-semibold text-white">{market.title}</div>
-                        <div className="text-xs text-gray-400">{market.category}</div>
-                      </td>
-                      <td className="py-4 text-gray-300">{market.status}</td>
-                      <td className="py-4 text-gray-300">{market.outcome || 'Pending'}</td>
-                      <td className="py-4 text-gray-300">YES {Number(market.yesPool || 0).toFixed(2)} / NO {Number(market.noPool || 0).toFixed(2)}</td>
-                      <td className="py-4">
-                        <div className="flex flex-wrap gap-2 items-center">
-                          <button
-                            type="button"
-                            onClick={() => handleAdminAction(market.id, 'close')}
-                            disabled={busyMarketId === market.id || market.status === 'settled'}
-                            className="rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                          >
-                            Close Market
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAdminAction(market.id, 'settle', 'YES')}
-                            disabled={busyMarketId === market.id}
-                            className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-black disabled:opacity-50"
-                          >
-                            Set Result YES
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAdminAction(market.id, 'settle', 'NO')}
-                            disabled={busyMarketId === market.id}
-                            className="rounded-lg bg-amber-400 px-3 py-2 text-xs font-semibold text-black disabled:opacity-50"
-                          >
-                            Set Result NO
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleAdminAction(market.id, 'payout')}
-                            disabled={busyMarketId === market.id}
-                            className="rounded-lg bg-cyan-400 px-3 py-2 text-xs font-semibold text-black disabled:opacity-50"
-                          >
-                            Trigger Payout
-                          </button>
-                          
-                          {market.status === 'open' && (
-                            <div className="flex items-center gap-2 border-l border-gray-700 pl-2 ml-1">
-                              <input 
-                                type="datetime-local" 
-                                className="bg-gray-800 text-gray-300 text-xs rounded border border-gray-700 px-2 py-1.5 focus:border-cyan-500 outline-none"
-                                value={closeTimeInputs[market.id] || ''}
-                                onChange={(e) => handleCloseTimeChange(market.id, e.target.value)}
-                                disabled={busyMarketId === market.id}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleAdminAction(market.id, 'updateTime', closeTimeInputs[market.id])}
-                                disabled={busyMarketId === market.id || !closeTimeInputs[market.id]}
-                                className="rounded bg-gray-700 hover:bg-gray-600 px-2 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                              >
-                                Update Time
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-
-            {(activeSection === 'Users' || activeSection === 'Wallet Control') ? (
-              <section className="panel">
-                <div className="section-header">
-                  <div>
-                    <span className="eyebrow">{activeSection}</span>
-                    <h2>User balances</h2>
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {data.users.map((user) => (
-                    <div key={user.id} className="rounded-xl border border-gray-800/70 bg-gray-900/40 p-4">
-                      <div className="text-white font-semibold">{user.name}</div>
-                      <div className="text-sm text-gray-400">{user.email}</div>
-                      <div className="mt-3 text-sm text-gray-300">Role: {user.role}</div>
-                      <div className="text-sm text-gray-300">Wallet: {Number(user.walletBalance || 0).toFixed(2)}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {(activeSection === 'Results' || activeSection === 'Users') ? (
-              <section className="panel">
-                <div className="section-header">
-                  <div>
-                    <span className="eyebrow">Trades</span>
-                    <h2>Recent trade flow</h2>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {recentTrades.map((trade) => (
-                    <div key={trade.id} className="rounded-xl border border-gray-800/70 bg-gray-900/40 p-4 text-sm text-gray-300">
-                      User #{trade.userId} placed {trade.side} for {Number(trade.amount).toFixed(2)} on market #{trade.marketId}.
-                    </div>
-                  ))}
-                  {!recentTrades.length ? <div className="panel-note">No trades recorded yet.</div> : null}
-                </div>
-              </section>
-            ) : null}
+      <div className="dash-grid" style={{ marginBottom: '2rem' }}>
+        <div className="gcard">
+          <div className="section-hdr">
+            <div className="section-title">PLATFORM ANALYTICS</div>
+          </div>
+          <div className="chart-wrap" style={{ height: '250px' }}>
+             <Bar data={barData} options={barOptions} />
           </div>
         </div>
-      ) : null}
-    </section>
+        <div className="gcard" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1rem' }}>
+          <div className="admin-stat">
+            <div className="astat-label">TOTAL VOLUME</div>
+            <div className="astat-val">${totalVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+          <div className="admin-stat">
+            <div className="astat-label">ACTIVE MARKETS</div>
+            <div className="astat-val">{data.markets.filter(m => m.status === 'open').length}</div>
+          </div>
+          <div className="admin-stat">
+            <div className="astat-label">REGISTERED USERS</div>
+            <div className="astat-val">{data.users.length}</div>
+          </div>
+          <div className="admin-stat">
+            <div className="astat-label">SYSTEM STATUS</div>
+            <div className="astat-val" style={{ color: 'var(--green)' }}>NOMINAL</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-grid">
+        <div className="admin-panel" style={{ alignSelf: 'start' }}>
+          <div style={{ fontFamily: "'Orbitron', monospace", color: 'var(--cyan)', marginBottom: '1.5rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>NAVIGATION</span>
+            <button 
+                className="admin-btn danger" 
+                style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                onClick={async () => {
+                  await logout();
+                  navigate('/login');
+                }}
+              >
+                LOGOUT
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {['Markets', 'Users', 'Wallet Control'].map(item => (
+              <button 
+                key={item} 
+                onClick={() => setActiveSection(item)}
+                className="admin-btn" 
+                style={{ 
+                  textAlign: 'left', 
+                  border: activeSection === item ? '1px solid var(--cyan)' : '1px solid transparent',
+                  background: activeSection === item ? 'rgba(0,245,255,0.1)' : 'transparent',
+                  color: activeSection === item ? 'var(--cyan)' : 'var(--muted)'
+                }}
+              >
+                {item.toUpperCase()}
+              </button>
+            ))}
+            
+            <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <button 
+                className="admin-btn danger" 
+                style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between' }}
+                onClick={async () => {
+                  await logout();
+                  navigate('/login');
+                }}
+              >
+                <span>LOGOUT</span>
+                <span>🚪</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="admin-panel" style={{ overflowX: 'auto' }}>
+          <div style={{ fontFamily: "'Orbitron', monospace", color: 'var(--cyan)', marginBottom: '1.5rem', fontWeight: 700 }}>
+            {activeSection === 'Markets' && 'MARKET MANAGEMENT'}
+            {activeSection === 'Users' && 'USER MANAGEMENT'}
+            {activeSection === 'Wallet Control' && 'WALLET AUDIT'}
+          </div>
+
+          {activeSection === 'Markets' && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>TITLE</th>
+                  <th>STATUS</th>
+                  <th>POOL (Y/N)</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.markets.map(market => (
+                  <tr key={market.id}>
+                    <td style={{ color: 'var(--cyan)' }}>#{market.id}</td>
+                    <td>{market.title}</td>
+                    <td>
+                      <span style={{ color: market.status === 'open' ? 'var(--green)' : market.status === 'settled' ? 'var(--muted)' : 'var(--orange)' }}>
+                        {market.status.toUpperCase()}
+                      </span>
+                    </td>
+                    <td>${Number(market.yesPool || 0).toFixed(0)} / ${Number(market.noPool || 0).toFixed(0)}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {market.status === 'open' && (
+                          <button 
+                            className="admin-btn danger" 
+                            disabled={busyMarketId === market.id}
+                            onClick={() => handleAdminAction(market.id, 'close')}
+                          >
+                            CLOSE
+                          </button>
+                        )}
+                        {market.status === 'closed' && (
+                          <>
+                            <button 
+                              className="admin-btn" 
+                              disabled={busyMarketId === market.id}
+                              onClick={() => handleAdminAction(market.id, 'settle', 'YES')}
+                            >
+                              SET YES
+                            </button>
+                            <button 
+                              className="admin-btn danger" 
+                              disabled={busyMarketId === market.id}
+                              onClick={() => handleAdminAction(market.id, 'settle', 'NO')}
+                            >
+                              SET NO
+                            </button>
+                          </>
+                        )}
+                        {market.status === 'settled' && (
+                           <button 
+                             className="admin-btn" 
+                             disabled={busyMarketId === market.id}
+                             onClick={() => handleAdminAction(market.id, 'payout')}
+                           >
+                             PAYOUT
+                           </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {data.markets.length === 0 && <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--muted)' }}>No markets found</td></tr>}
+              </tbody>
+            </table>
+          )}
+
+          {activeSection === 'Users' && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>NAME</th>
+                  <th>EMAIL</th>
+                  <th>ROLE</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.users.map(user => (
+                  <tr key={user.id}>
+                    <td style={{ color: 'var(--cyan)' }}>#{user.id}</td>
+                    <td>{user.name}</td>
+                    <td>{user.email}</td>
+                    <td><span style={{ color: user.role === 'admin' ? 'var(--purple)' : 'var(--text)' }}>{user.role.toUpperCase()}</span></td>
+                    <td>
+                      <button className="admin-btn danger">BAN WALLET</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {activeSection === 'Wallet Control' && (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>USER</th>
+                  <th>BALANCE</th>
+                  <th>LOCKED</th>
+                  <th>TRUST SCORE</th>
+                  <th>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.users.map(user => (
+                  <tr key={user.id}>
+                    <td>{user.name}</td>
+                    <td style={{ color: 'var(--cyan)' }}>${Number(user.walletBalance || 0).toFixed(2)}</td>
+                    <td style={{ color: 'var(--orange)' }}>$0.00</td>
+                    <td style={{ color: 'var(--green)' }}>95+</td>
+                    <td>
+                      <button className="admin-btn">AUDIT TXs</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -19,13 +19,14 @@ function buildUrl(path) {
 }
 
 async function request(path, options = {}) {
+  const { headers, ...restOptions } = options;
   const response = await fetch(buildUrl(path), {
     credentials: 'include',
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
-      ...(options.headers || {})
-    },
-    ...options
+      ...(headers || {})
+    }
   });
 
   const isJson = response.headers.get('content-type')?.includes('application/json');
@@ -83,6 +84,27 @@ export function getWallet(accessToken) {
     headers: {
       Authorization: `Bearer ${accessToken}`
     }
+  });
+}
+
+export function buyCoins(amount, accessToken) {
+  return authRequest('/api/wallet/buy-coins', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ amount })
+  });
+}
+
+export function createPaymentIntent(amount, accessToken) {
+  return authRequest('/api/wallet/payment-intent', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ amount })
+  });
+}
+
+export function confirmPayment(paymentId, accessToken) {
+  return authRequest('/api/wallet/confirm-payment', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ paymentId })
   });
 }
 
@@ -156,5 +178,36 @@ export function updateAdminMarketCloseTime(id, closeTime, accessToken) {
   return authRequest(`/api/admin/market/close-time/${id}`, accessToken, {
     method: 'POST',
     body: JSON.stringify({ closeTime })
+  });
+}
+
+export function getSquads() {
+  return request('/api/squads');
+}
+
+export function getSquad(id) {
+  return request(`/api/squads/${id}`);
+}
+
+export function getMySquads(accessToken) {
+  return authRequest('/api/squads/my', accessToken);
+}
+
+export function createSquad(payload, accessToken) {
+  return authRequest('/api/squads', accessToken, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function joinSquad(id, accessToken) {
+  return authRequest(`/api/squads/${id}/join`, accessToken, {
+    method: 'POST'
+  });
+}
+
+export function leaveSquad(id, accessToken) {
+  return authRequest(`/api/squads/${id}/leave`, accessToken, {
+    method: 'POST'
   });
 }

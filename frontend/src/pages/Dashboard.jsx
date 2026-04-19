@@ -1,72 +1,62 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MarketCard from '../components/MarketCard';
-import StatsCard from '../components/StatsCard';
+import HeroCanvas from '../components/HeroCanvas';
+import HexGrid from '../components/HexGrid';
 import { useAuth } from '../context/AuthContext';
-import { getMarkets, getUserTrades, getWallet } from '../lib/api';
+import { getMarkets, getUserTrades, getWallet, getMySquads } from '../lib/api';
 import { formatCoins } from '../lib/marketUtils';
 import { buildUserStats } from '../lib/statHelpers';
-import BackgroundOverlay from '../components/BackgroundOverlay';
 import { connectMarketSocket } from '../lib/socket';
+
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler } from 'chart.js';
+import { Line, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, ArcElement, Filler);
 
 function Dashboard() {
   const { user, withAccessToken, clearSession } = useAuth();
   const [wallet, setWallet] = useState(null);
   const [markets, setMarkets] = useState([]);
   const [trades, setTrades] = useState([]);
+  const [mySquad, setMySquad] = useState(null);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-
     async function loadDashboard() {
       setIsLoading(true);
       setError('');
-
       try {
-        const [walletData, marketData, tradeData] = await Promise.all([
-          withAccessToken((token) => getWallet(token)).catch((err) => { console.error('Dashboard: Wallet fetch failed', err); return null; }),
-          getMarkets({ sort: 'latest' }).catch((err) => { console.error('Dashboard: Markets fetch failed', err); return { data: [] }; }),
-          withAccessToken((token) => getUserTrades(user.id, token)).catch((err) => { console.error('Dashboard: Trades fetch failed', err); return { data: [] }; })
+        const [walletData, marketData, tradeData, squadData] = await Promise.all([
+          withAccessToken((token) => getWallet(token)).catch(() => null),
+          getMarkets({ sort: 'latest' }).catch(() => ({ data: [] })),
+          withAccessToken((token) => getUserTrades(user.id, token)).catch(() => ({ data: [] })),
+          withAccessToken((token) => getMySquads(token)).catch(() => ({ squads: [] }))
         ]);
 
-        console.log('[DEBUG] Dashboard API Data:', { walletData, marketData, tradeData });
-
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setWallet(walletData);
         setMarkets(marketData.data || []);
         setTrades(tradeData.data || []);
-      } catch (loadError) {
-        if (loadError.status === 401) {
+        setMySquad(squadData.squads?.[0] || null);
+      } catch (err) {
+        if (err.status === 401) {
           clearSession();
           return;
         }
-
-        if (isMounted) {
-          setError(loadError.data?.message || 'Unable to load dashboard.');
-        }
+        if (isMounted) setError('Unable to load dashboard.');
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
-    if (user?.id) {
-      loadDashboard();
-    }
+    if (user?.id) loadDashboard();
 
-    // Set up realtime instant market updates
     const socket = connectMarketSocket();
     socket.on('market:update', (data) => {
-      console.log('[DEBUG] Instant Socket Update:', data);
-      setMarkets((prev) =>
-        prev.map((m) => (String(m.id) === String(data.marketId) ? { ...m, ...data.market } : m))
-      );
+      setMarkets((prev) => prev.map((m) => String(m.id) === String(data.marketId) ? { ...m, ...data.market } : m));
     });
 
     return () => {
@@ -76,211 +66,198 @@ function Dashboard() {
   }, [clearSession, user?.id, withAccessToken]);
 
   const stats = useMemo(() => buildUserStats(trades, markets), [trades, markets]);
-  const trendingMarkets = useMemo(
-    () =>
-      [...markets]
-        .sort((left, right) => (right.yesPool + right.noPool) - (left.yesPool + left.noPool))
-        .slice(0, 3),
-    [markets]
-  );
+  const trendingMarkets = useMemo(() => 
+    [...markets].sort((a, b) => (b.yesPool + b.noPool) - (a.yesPool + a.noPool)).slice(0, 4),
+  [markets]);
+
+  const lineData = useMemo(() => {
+    let b = 1000;
+    const labs = ['Start'];
+    const vals = [b];
+    
+    const recentTrades = [...trades].reverse().slice(0, 8).reverse();
+    recentTrades.forEach((t, i) => {
+      let pnl = 0;
+      if (t.status === 'WIN') pnl = (t.payout || 0) - (t.amount || 0);
+      else if (t.status === 'LOSS') pnl = -(t.amount || 0);
+      
+      b += pnl;
+      labs.push('T' + (i + 1));
+      vals.push(Math.max(0, b));
+    });
+    
+    if (vals.length === 1 && wallet) {
+      labs.push('Now');
+      vals.push(wallet.availableBalance);
+    }
+    
+    return {
+      labels: labs,
+      datasets: [{
+        data: vals,
+        borderColor: '#00f5ff',
+        backgroundColor: 'rgba(0,245,255,.07)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#00f5ff',
+        pointBorderColor: 'rgba(0,245,255,.3)',
+        pointBorderWidth: 2
+      }]
+    };
+  }, [trades, wallet]);
+
+  const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#4a6080', font: { size: 10, family: "'Share Tech Mono', monospace" } }, grid: { color: 'rgba(255,255,255,.03)' } },
+      y: { ticks: { color: '#4a6080', font: { size: 10, family: "'Share Tech Mono', monospace" } }, grid: { color: 'rgba(255,255,255,.03)' } }
+    }
+  };
+
+  const mixData = useMemo(() => {
+    const cats = {};
+    markets.forEach(m => {
+       const cat = m.category || 'Other';
+       cats[cat] = (cats[cat] || 0) + 1;
+    });
+    const labels = Object.keys(cats);
+    const data = labels.map(k => cats[k]);
+    
+    return {
+      labels: labels.length ? labels : ['None'],
+      datasets: [{
+        data: data.length ? data : [1],
+        backgroundColor: ['rgba(0,255,136,.7)', 'rgba(139,92,246,.7)', 'rgba(0,245,255,.7)', 'rgba(255,107,53,.7)', 'rgba(255,215,0,.7)'],
+        borderWidth: 0,
+        hoverOffset: 6
+      }]
+    };
+  }, [markets]);
+
+  const mixOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#4a6080', font: { size: 11, family: "'Rajdhani', sans-serif" }, padding: 10 }, position: 'right' }
+    },
+    cutout: '60%'
+  };
 
   return (
-    <div className="relative min-h-screen text-light-text">
-      {/* Background Overlay */}
-      <BackgroundOverlay withChart={true} showBaseGradient={false} opacity="opacity-40" />
+    <div className="page">
+      <div className="page-hdr">
+        <div>
+          <h1 className="page-title">DASHBOARD</h1>
+          <div className="page-sub">Overview of your Future portfolio</div>
+        </div>
+      </div>
 
-      {/* Hero Section */}
-      <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Side */}
-            <div className="space-y-8">
-              <div>
-                <h1 className="text-5xl lg:text-6xl font-bold text-white mb-6">
-                  Trade Predictions <span className="text-neon-green">Like a Pro</span>
-                </h1>
-                <p className="text-xl text-gray-300 mb-8">
-                  Master the art of prediction trading with real-time market insights, 
-                  secure transactions, and smart analytics to maximize your profits.
-                </p>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link 
-                  className="bg-neon-green hover:bg-green-400 text-black font-semibold px-8 py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-neon-green/50"
-                  to="/markets"
-                >
-                  Start Trading Now
-                </Link>
-                <Link 
-                  className="border-2 border-neon-green text-neon-green hover:bg-neon-green hover:text-black font-semibold px-8 py-4 rounded-lg transition-all duration-300"
-                  to="/profile"
-                >
-                  View Portfolio
-                </Link>
-              </div>
-            </div>
+      {error && <div className="form-error mb-4">{error}</div>}
 
-            {/* Right Side */}
-            <div className="relative">
-              <div className="bg-gray-800/50 backdrop-blur-md rounded-2xl p-8 shadow-2xl border border-cyan-500/20 shadow-[0_0_30px_rgba(0,245,255,0.15)] transition-all duration-500 hover:shadow-[0_0_40px_rgba(0,245,255,0.3)]">
-                <div className="aspect-square bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">📈</div>
-                    <p className="text-gray-400">Trading Dashboard Preview</p>
-                  </div>
-                </div>
-                
-                {/* Floating Stat Cards */}
-                <div className="absolute -top-4 -left-4 bg-neon-green text-black px-4 py-2 rounded-lg shadow-lg">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-2xl">⭐</span>
-                    <div>
-                      <div className="font-bold">4.9</div>
-                      <div className="text-xs">Rating</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="absolute -bottom-4 -right-4 bg-cyan-500 text-black px-4 py-2 rounded-lg shadow-lg">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-2xl">👥</span>
-                    <div>
-                      <div className="font-bold">80K+</div>
-                      <div className="text-xs">Users</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div className="hero-3d">
+        <HeroCanvas />
+        <HexGrid />
+        <div className="hero-overlay">
+          <div className="hero-greeting" style={{ textTransform: 'uppercase' }}>WELCOME BACK, {user?.name || user?.username || 'TRADER'}</div>
+          <div className="hero-sub">The future of social trading on Future</div>
+        </div>
+      </div>
+
+      <div className="stats-row">
+        <div className="scard cyan">
+          <div className="scard-glow"></div>
+          <div className="scard-label">WALLET BALANCE</div>
+          <div className="scard-val">{wallet ? formatCoins(wallet.availableBalance) : '...'}</div>
+          <div className="scard-sub">Available coins</div>
+        </div>
+        <div className="scard purple">
+          <div className="scard-glow"></div>
+          <div className="scard-label">OPEN TRADES</div>
+          <div className="scard-val">{stats.openTrades}</div>
+          <div className="scard-sub">Active positions</div>
+        </div>
+        <div className="scard green">
+          <div className="scard-glow"></div>
+          <div className="scard-label">WIN RATE</div>
+          <div className="scard-val">{stats.winRate.toFixed(1)}%</div>
+          <div className="scard-sub">All-time</div>
+        </div>
+        <div className="scard gold">
+          <div className="scard-glow"></div>
+          <div className="scard-label">REALIZED P&L</div>
+          <div className="scard-val">{formatCoins(stats.realizedPnl)}</div>
+          <div className="scard-sub">Total profit/loss</div>
+        </div>
+      </div>
+
+      <div className="dash-grid-3">
+        <div className="gcard">
+          <div className="section-hdr"><div className="section-title">WALLET GROWTH</div><span className="live-tag">LIVE</span></div>
+          <div className="chart-wrap" style={{ position: 'relative', height: '220px' }}>
+            <Line data={lineData} options={lineOptions} />
           </div>
         </div>
-      </section>
-
-      {/* Feature Section */}
-      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Why Choose Our Platform?</h2>
-            <p className="text-gray-400">Advanced tools and features for professional prediction traders</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-xl font-semibold text-white mb-2">Real-time Trading</h3>
-              <p className="text-gray-400">Live market updates and instant trade execution with zero latency</p>
-            </div>
-            
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
-              <div className="text-4xl mb-4">🔒</div>
-              <h3 className="text-xl font-semibold text-white mb-2">Secure System</h3>
-              <p className="text-gray-400">Bank-level security with encrypted transactions and protected funds</p>
-            </div>
-            
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.3)] hover:-translate-y-1 transition-all duration-300">
-              <div className="text-4xl mb-4">🧠</div>
-              <h3 className="text-xl font-semibold text-white mb-2">Smart Predictions</h3>
-              <p className="text-gray-400">AI-powered insights and analytics to guide your trading decisions</p>
-            </div>
+        <div className="gcard">
+          <div className="section-hdr"><div className="section-title">MARKET MIX</div></div>
+          <div className="chart-wrap" style={{ position: 'relative', height: '220px' }}>
+            <Doughnut data={mixData} options={mixOptions} />
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Stats Section */}
-      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">Protect your investments with precision</h2>
-            <p className="text-gray-400">Track your performance and optimize your strategy</p>
+      <div className="dash-grid" style={{ marginBottom: '2rem' }}>
+        <div className="gcard" style={{ flex: 1 }}>
+          <div className="section-hdr">
+            <div className="section-title">🛡️ MY SQUAD</div>
           </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Chart-style card */}
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
-              <h3 className="text-lg font-semibold text-white mb-4">Market Performance</h3>
-              <div className="h-32 bg-gradient-to-r from-neon-green/20 to-cyan-500/20 rounded-lg flex items-center justify-center">
-                <span className="text-gray-400">📊 Chart Placeholder</span>
+          {mySquad ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ fontSize: '1.2rem', color: 'var(--cyan)' }}>{mySquad.name}</div>
+              <div style={{ color: 'var(--muted)' }}>{mySquad.description || 'No description'}</div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div><span style={{color: 'var(--muted)'}}>Role:</span> {mySquad.role.toUpperCase()}</div>
+                <div><span style={{color: 'var(--muted)'}}>Members:</span> {mySquad.member_count}</div>
               </div>
+              <Link to={`/squads/${mySquad.id}`}><button className="btn-neon" style={{ padding: '0.5rem', marginTop: '1rem' }}>GO TO SQUAD</button></Link>
             </div>
-            
-            {/* Circular progress */}
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
-              <h3 className="text-lg font-semibold text-white mb-4">Win Rate</h3>
-              <div className="relative w-24 h-24 mx-auto mb-4">
-                <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 36 36">
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeDasharray="75, 100"
-                    className="text-gray-600"
-                  />
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeDasharray={`${stats.winRate}, 100`}
-                    className="text-neon-green"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-neon-green">{stats.winRate.toFixed(0)}%</span>
-                </div>
-              </div>
-              <p className="text-center text-gray-400">Success Rate</p>
-            </div>
-            
-            {/* Earnings card */}
-            <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(138,43,226,0.25)] hover:-translate-y-1 transition-all duration-300">
-              <h3 className="text-lg font-semibold text-white mb-4">Total Earnings</h3>
-              <div className="text-3xl font-bold text-neon-green mb-2">
-                {formatCoins(stats.realizedPnl)}
-              </div>
-              <p className="text-gray-400">Realized P&L</p>
-            </div>
+          ) : (
+             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1rem', padding: '2rem' }}>
+               <div style={{ fontSize: '1.2rem', color: 'var(--text)' }}>Not in a squad yet?</div>
+               <div style={{ color: 'var(--muted)' }}>Join a squad to pool resources, compete with other groups, and climb the leaderboard!</div>
+               <Link to="/squads"><button className="btn-neon">BROWSE SQUADS</button></Link>
+             </div>
+          )}
+        </div>
+        
+        <div className="gcard" style={{ flex: 1 }}>
+          <div className="section-hdr">
+            <div className="section-title">⚡ QUICK STATS</div>
+          </div>
+          <div className="profile-list">
+            <div><span>Total Volume</span><strong>{formatCoins(stats.totalVolume)}</strong></div>
+            <div><span>Total Trades</span><strong>{trades.length}</strong></div>
+            <div><span>Longest Streak</span><strong>{stats.longestWinStreak}</strong></div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Existing Dashboard Content */}
-      <section className="relative z-10 py-16 px-4 sm:px-6 lg:px-8 bg-gray-900/30">
-        <div className="max-w-7xl mx-auto">
-          {error ? <div className="bg-red-900/50 text-red-400 p-4 rounded-lg mb-8">{error}</div> : null}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            <StatsCard label="Open positions" value={stats.openTrades} helper="Still live in market" />
-            <StatsCard label="Settled win rate" value={`${stats.winRate.toFixed(1)}%`} accent="purple" />
-            <StatsCard label="Realized PnL" value={formatCoins(stats.realizedPnl)} accent="pink" />
-            <StatsCard label="Longest streak" value={stats.longestWinStreak} helper="Winning trades" />
-          </div>
-
-          <div className="bg-gray-800/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-transparent hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(0,245,255,0.2)] transition-all duration-300">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <span className="text-neon-green text-sm font-semibold">Trending now</span>
-                <h2 className="text-2xl font-bold text-white">High-activity markets</h2>
-              </div>
-              <Link className="text-neon-green hover:text-green-400 transition-colors" to="/markets">
-                See all markets →
-              </Link>
-            </div>
-
-            {isLoading ? <div className="text-center py-8 text-gray-400">Loading market pulse...</div> : null}
-            {!isLoading && !trendingMarkets.length ? (
-              <div className="text-center py-8 text-gray-400">No live markets yet. Create or wait for new order flow.</div>
-            ) : null}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {trendingMarkets.map((market) => (
-                <MarketCard key={market.id} compact market={market} />
-              ))}
-            </div>
-          </div>
+      <div className="gcard">
+        <div className="section-hdr">
+          <div className="section-title">🔥 TRENDING MARKETS</div>
+          <Link to="/markets"><button className="see-all">See All Markets →</button></Link>
         </div>
-      </section>
+        <div className="markets-grid">
+          {isLoading && <div className="empty-panel">Loading markets...</div>}
+          {!isLoading && trendingMarkets.length === 0 && <div className="empty-panel">No markets available.</div>}
+          {trendingMarkets.map(market => (
+             <MarketCard key={market.id} market={market} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

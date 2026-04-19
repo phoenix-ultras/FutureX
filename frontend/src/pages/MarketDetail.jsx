@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import TradePanel from '../components/TradePanel';
-import StatsCard from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
 import { getMarket, getMarketOdds, getMarkets } from '../lib/api';
 import { connectMarketSocket } from '../lib/socket';
@@ -19,10 +18,7 @@ function MarketDetail() {
   const [isLoading, setIsLoading] = useState(true);
 
   async function loadMarketData({ silent = false } = {}) {
-    if (!silent) {
-      setIsLoading(true);
-    }
-
+    if (!silent) setIsLoading(true);
     try {
       const [marketData, oddsData, relatedData] = await Promise.all([
         getMarket(id),
@@ -37,9 +33,7 @@ function MarketDetail() {
     } catch (loadError) {
       setError(loadError.data?.message || 'Unable to load market.');
     } finally {
-      if (!silent) {
-        setIsLoading(false);
-      }
+      if (!silent) setIsLoading(false);
     }
   }
 
@@ -57,24 +51,14 @@ function MarketDetail() {
       socket.emit('joinMarket', { marketId: Number(id) });
     });
 
-    socket.on('connect_error', () => {
-      setSocketState('Polling');
-    });
+    socket.on('connect_error', () => setSocketState('Polling'));
 
     const handleRefresh = (payload) => {
-      if (!payload || String(payload.marketId || payload.id) !== String(id)) {
-        return;
-      }
-
+      if (!payload || String(payload.marketId || payload.id) !== String(id)) return;
       setActivity((current) => [
-        {
-          id: `${Date.now()}-${current.length}`,
-          label: payload.type || 'Market update',
-          time: new Date().toLocaleTimeString()
-        },
+        { id: `${Date.now()}-${current.length}`, label: payload.type || 'Market update', time: new Date().toLocaleTimeString() },
         ...current
       ].slice(0, 6));
-
       loadMarketData({ silent: true });
     };
 
@@ -82,15 +66,10 @@ function MarketDetail() {
     socket.on('market:odds', handleRefresh);
     socket.on('trade:placed', handleRefresh);
 
-    pollingTimer = window.setInterval(() => {
-      loadMarketData({ silent: true });
-    }, 12000);
+    pollingTimer = window.setInterval(() => loadMarketData({ silent: true }), 12000);
 
     return () => {
-      if (pollingTimer) {
-        window.clearInterval(pollingTimer);
-      }
-
+      if (pollingTimer) window.clearInterval(pollingTimer);
       socket.emit('market:unsubscribe', { marketId: Number(id) });
       socket.disconnect();
     };
@@ -102,121 +81,105 @@ function MarketDetail() {
   function handleTradeExecuted(result) {
     setMarket(result.market);
     setActivity((current) => [
-      {
-        id: `${Date.now()}-trade`,
-        label: result.message || 'Trade executed',
-        time: new Date().toLocaleTimeString()
-      },
+      { id: `${Date.now()}-trade`, label: result.message || 'Trade executed', time: new Date().toLocaleTimeString() },
       ...current
     ].slice(0, 6));
     loadMarketData({ silent: true });
   }
 
-  if (isLoading) {
-    return <div className="panel loading-panel">Loading market stream...</div>;
-  }
-
-  if (error || !market) {
-    return <div className="form-error">{error || 'Market not found.'}</div>;
-  }
+  if (isLoading) return <div className="page"><div className="empty">Loading market stream...</div></div>;
+  if (error || !market) return <div className="page"><div className="form-error">{error || 'Market not found.'}</div></div>;
 
   return (
-    <section className="page-section">
-      <div className="detail-grid">
-        <div className="detail-main">
-          <section className="panel detail-hero">
-            <div className="market-card-header">
-              <div>
-                <span className="category-pill">{market.category}</span>
-                <h1>{market.title}</h1>
-              </div>
-              <span className={`socket-badge ${socketState === 'Live' ? 'socket-live' : 'socket-offline'}`}>
-                {socketState}
-              </span>
-            </div>
+    <div className="page">
+      <div className="page-hdr">
+        <div>
+          <h1 className="page-title">MARKET DETAIL</h1>
+          <div className="page-sub">Trade on real-world events</div>
+        </div>
+        <div className={`live-tag ${socketState === 'Live' ? '' : 'offline'}`}>{socketState}</div>
+      </div>
 
-            {market.description ? <p className="hero-copy">{market.description}</p> : null}
-
-            <div className="detail-meta">
-              <div>
-                <span>Outcome type</span>
-                <strong>{market.outcomeType}</strong>
-              </div>
-              <div>
-                <span>Closing time</span>
-                <strong>{formatClosingTime(market.closingTime)}</strong>
-              </div>
-              <div>
-                <span>Status</span>
-                <strong>
-                  {market.status === "open" && "🟢 OPEN"}
-                  {market.status === "closed" && "🟡 CLOSED"}
-                  {market.status === "settled" && "🔴 SETTLED"}
-                  {!['open', 'closed', 'settled'].includes(market.status) && market.status}
-                </strong>
-              </div>
-              <div>
-                <span>Settlement</span>
-                <strong>{market.settlementRule || 'Manual rule'}</strong>
+      <div className="dash-grid-3">
+        {/* Main Left Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          <div className="gcard">
+            <div className="section-hdr" style={{ marginBottom: '0.5rem' }}>
+              <div className="mcard-cat cat-trend">{market.category || 'MARKET'}</div>
+              <div className={`mcard-status ${market.status === 'open' ? 'status-live' : 'status-closed'}`}>
+                 {market.status === "open" && "🟢 OPEN"}
+                 {market.status === "closed" && "🟡 CLOSED"}
+                 {market.status === "settled" && "🔴 SETTLED"}
               </div>
             </div>
-          </section>
-
-          <div className="stats-grid">
-            <StatsCard label="YES odds" value={formatOdds(displayedOdds.yesOdds)} />
-            <StatsCard label="NO odds" value={formatOdds(displayedOdds.noOdds)} accent="purple" />
-            <StatsCard label="Total volume" value={formatCoins(displayedOdds.totalPool || metrics.totalPool)} accent="pink" />
-            <StatsCard label="Result" value={market.result || 'Pending'} />
+            <h2 className="page-title" style={{ fontSize: '1.4rem', marginBottom: '1rem' }}>{market.title}</h2>
+            <p className="mcard-desc" style={{ fontSize: '1rem', color: 'var(--text)' }}>
+              {market.description || 'Predict the outcome of this market.'}
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+              <div className="scard" style={{ flex: 1, padding: '1rem' }}>
+                <div className="scard-label">POOL VOLUME</div>
+                <div className="scard-val" style={{ fontSize: '1.2rem', color: 'var(--cyan)' }}>{formatCoins(displayedOdds.totalPool || metrics.totalPool)}</div>
+              </div>
+              <div className="scard" style={{ flex: 1, padding: '1rem' }}>
+                <div className="scard-label">CLOSES IN</div>
+                <div className="scard-val" style={{ fontSize: '1.2rem', color: 'var(--purple)' }}>{formatClosingTime(market.closingTime)}</div>
+              </div>
+            </div>
           </div>
 
-          <section className="panel">
-            <div className="section-header">
-              <div>
-                <span className="eyebrow">Live activity</span>
-                <h2>Realtime feed</h2>
-              </div>
+          <div className="gcard">
+            <div className="section-hdr">
+              <div className="section-title">⚡ REALTIME FEED</div>
             </div>
-
-            <div className="activity-list">
-              {activity.length ? (
-                activity.map((event) => (
-                  <div className="activity-item" key={event.id}>
-                    <strong>{event.label}</strong>
-                    <span>{event.time}</span>
+            {activity.length ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {activity.map((event) => (
+                  <div key={event.id} className="trow" style={{ padding: '0.5rem 0' }}>
+                    <div className="trow-info">
+                      <div className="trow-market">{event.label}</div>
+                      <div className="trow-meta">{event.time}</div>
+                    </div>
                   </div>
-                ))
-              ) : (
-                <div className="panel-note">Waiting for the next order flow event...</div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="section-header">
-              <div>
-                <span className="eyebrow">You may also like</span>
-                <h2>Related markets</h2>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="empty-txt">Waiting for the next order flow event...</div>
+            )}
+          </div>
 
-            <div className="related-links">
+        </div>
+
+        {/* Right Sidebar Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <TradePanel market={market} onTradeExecuted={handleTradeExecuted} userId={user?.id} />
+
+          <div className="gcard">
+            <div className="section-hdr">
+              <div className="section-title">🔗 RELATED MARKETS</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {relatedMarkets.length ? (
                 relatedMarkets.map((entry) => (
-                  <Link className="related-link" key={entry.id} to={`/market/${entry.id}`}>
-                    <strong>{entry.title}</strong>
-                    <span>{entry.category}</span>
+                  <Link key={entry.id} to={`/market/${entry.id}`} style={{ textDecoration: 'none' }}>
+                    <div className="trow" style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div className="trow-info">
+                        <div className="trow-market" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.title}</div>
+                        <div className="trow-meta">{entry.category}</div>
+                      </div>
+                    </div>
                   </Link>
                 ))
               ) : (
-                <div className="panel-note">No related markets available yet.</div>
+                <div className="empty-txt">No related markets.</div>
               )}
             </div>
-          </section>
+          </div>
         </div>
 
-        <TradePanel market={market} onTradeExecuted={handleTradeExecuted} userId={user?.id} />
       </div>
-    </section>
+    </div>
   );
 }
 

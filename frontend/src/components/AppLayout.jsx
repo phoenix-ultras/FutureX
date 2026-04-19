@@ -1,14 +1,18 @@
 import { Outlet } from 'react-router-dom';
-import Navbar from './Navbar';
+import Sidebar from './Sidebar';
+import Ticker from './Ticker';
+import PageGuide from './PageGuide';
 
 function AppLayout() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-bg via-gray-900 to-dark-bg text-light-text">
-      <Navbar />
-      <main>
+    <>
+      <Ticker />
+      <Sidebar />
+      <main className="content">
         <Outlet />
       </main>
-    </div>
+      <PageGuide />
+    </>
   );
 }
 

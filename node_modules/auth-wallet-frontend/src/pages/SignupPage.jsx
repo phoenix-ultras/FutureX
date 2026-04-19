@@ -1,37 +1,28 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { signup } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
-const initialState = {
-  name: '',
-  email: '',
-  password: '',
-  confirmPassword: ''
-};
+const initialState = { name: '', email: '', password: '', confirmPassword: '' };
 
 function SignupPage() {
   const [form, setForm] = useState(initialState);
+  const [role, setRole] = useState('user');
+  const [adminKey, setAdminKey] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const validationMessage = useMemo(() => {
-    if (!form.name) {
-      return '';
-    }
-
-    if (form.name.trim().length < 2) {
-      return 'Name must be at least 2 characters.';
-    }
-
-    if (form.password && form.password.length < 8) {
-      return 'Password must be at least 8 characters.';
-    }
-
-    if (form.confirmPassword && form.password !== form.confirmPassword) {
-      return 'Passwords do not match.';
-    }
-
+    if (!form.name) return '';
+    if (form.name.trim().length < 2) return 'Name must be at least 2 characters.';
+    if (form.password && form.password.length < 8) return 'Password must be at least 8 characters.';
+    if (form.confirmPassword && form.password !== form.confirmPassword) return 'Passwords do not match.';
     return '';
   }, [form]);
 
@@ -46,11 +37,14 @@ function SignupPage() {
     setError('');
     setIsSubmitting(true);
 
+    // If we wanted to actually support signup with role admin,
+    // we would pass it to the backend here. For the prototype we just use the API.
     try {
       await signup({
         name: form.name,
         email: form.email,
         password: form.password
+        // role, adminKey
       });
       navigate('/login', {
         replace: true,
@@ -64,88 +58,71 @@ function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-bg via-gray-900 to-dark-bg text-light-text flex items-center justify-center px-4">
-      <form className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 shadow-2xl w-full max-w-md" onSubmit={handleSubmit}>
-        <div className="text-center mb-8">
-          <span className="text-neon-green text-sm font-semibold">Initialize account</span>
-          <h1 className="text-3xl font-bold text-white mt-2">Create Account</h1>
-          <p className="text-gray-400 mt-2">New traders start with 1000 starter coins.</p>
+    <div id="auth-screen" className="active">
+      <div className="auth-container">
+        <div className="auth-logo">FUTURE<span>X</span></div>
+        <div className="auth-sub">INITIALIZE WALLET</div>
+        
+        <div className="auth-tabs">
+          <div className={`auth-tab ${role === 'user' ? 'active' : ''}`} onClick={() => setRole('user')}>👤 USER</div>
+          <div className={`auth-tab ${role === 'admin' ? 'active' : ''}`} onClick={() => setRole('admin')}>🛡️ ADMIN</div>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-semibold text-white mb-2">Name</label>
-            <input
-              id="name"
-              type="text"
-              value={form.name}
-              onChange={(event) => setForm({ ...form, name: event.target.value })}
-              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-neon-green focus:ring-2 focus:ring-neon-green/20 outline-none transition-all"
-              placeholder="Enter your full name"
-              required
-              minLength={2}
-              maxLength={80}
-            />
-          </div>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <input 
+            type="text" 
+            className="auth-input" 
+            placeholder="FULL NAME" 
+            value={form.name}
+            onChange={e => setForm({...form, name: e.target.value})}
+            required
+          />
+          <input 
+            type="email" 
+            className="auth-input" 
+            placeholder="EMAIL ADDRESS" 
+            value={form.email}
+            onChange={e => setForm({...form, email: e.target.value})}
+            required
+          />
+          <input 
+            type="password" 
+            className="auth-input" 
+            placeholder="PASSWORD" 
+            value={form.password}
+            onChange={e => setForm({...form, password: e.target.value})}
+            required
+            minLength={8}
+          />
+          <input 
+            type="password" 
+            className="auth-input" 
+            placeholder="CONFIRM PASSWORD" 
+            value={form.confirmPassword}
+            onChange={e => setForm({...form, confirmPassword: e.target.value})}
+            required
+            minLength={8}
+          />
+          <input 
+            type="password" 
+            className={`auth-input admin-key ${role === 'admin' ? 'active' : ''}`}
+            placeholder="ADMIN SECRET KEY" 
+            value={adminKey}
+            onChange={e => setAdminKey(e.target.value)}
+            required={role === 'admin'}
+          />
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-semibold text-white mb-2">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
-              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-neon-green focus:ring-2 focus:ring-neon-green/20 outline-none transition-all"
-              placeholder="Enter your email"
-              required
-            />
-          </div>
+          {(error || validationMessage) && <div style={{ color: 'var(--red)', fontSize: '0.8rem', textAlign: 'center' }}>{error || validationMessage}</div>}
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-semibold text-white mb-2">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
-              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-neon-green focus:ring-2 focus:ring-neon-green/20 outline-none transition-all"
-              placeholder="Create a password"
-              required
-              minLength={8}
-            />
-          </div>
+          <button type="submit" className="btn-neon" style={{ marginTop: '1rem' }} disabled={isSubmitting}>
+            {isSubmitting ? 'PROVISIONING...' : 'REGISTER ACCOUNT'}
+          </button>
+        </form>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-semibold text-white mb-2">Confirm password</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={form.confirmPassword}
-              onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
-              className="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-neon-green focus:ring-2 focus:ring-neon-green/20 outline-none transition-all"
-              placeholder="Confirm your password"
-              required
-              minLength={8}
-            />
-          </div>
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8rem', color: 'var(--muted)' }}>
+          ALREADY CONNECTED? <Link to="/login" style={{ color: 'var(--cyan)', textDecoration: 'none' }}>LOG IN</Link>
         </div>
-
-        {error || validationMessage ? (
-          <div className="bg-red-900/50 text-red-400 p-3 rounded-lg mt-4">{error || validationMessage}</div>
-        ) : null}
-
-        <button 
-          className="w-full bg-neon-green hover:bg-green-400 text-black font-semibold py-3 rounded-lg transition-all duration-300 mt-6 shadow-lg hover:shadow-neon-green/50"
-          type="submit" 
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Provisioning...' : 'Open account'}
-        </button>
-
-        <p className="text-center text-gray-400 mt-6">
-          Already have an account? <Link to="/login" className="text-neon-green hover:text-green-400 transition-colors">Log in</Link>
-        </p>
-      </form>
+      </div>
     </div>
   );
 }
